@@ -1,15 +1,20 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { AlertCircle, Download, BarChart2, FileText } from 'lucide-react';
 
 type ReportRow = { quote_no: string; status: string; line_count: number; gross_cents: number; net_cents: number; effective_discount_pct: number };
-type Report = { rows: ReportRow[]; summary: { totalQuotations: number; totalNetCents: number; avgDiscountPct: number } };
+type Pagination = { page: number; limit: number; total: number; totalPages: number };
+type ReportSummary = { totalQuotations: number; totalNetCents: number; avgDiscountPct: number };
+type Report = { rows: ReportRow[]; summary: ReportSummary; pagination: Pagination };
 type SalesRep = { id: string; fullName: string; email: string; team: string | null };
 type ReportFilterOptions = { reps: SalesRep[]; teams: string[]; approvalStatuses: string[] };
 type Product = { _id: string; name: string };
 type Category = { _id: string; name: string };
+
+const PAGE_LIMIT = 20;
+const SKELETON_ROWS = 3;
 
 function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -40,8 +45,15 @@ export default function ReportsPage() {
   const [filterOptions, setFilterOptions] = useState<ReportFilterOptions | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [report, setReport] = useState<Report | null>(null);
+
+  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     api.get<ReportFilterOptions>('/reports/sales/filters').then(setFilterOptions).catch(() => {});
@@ -59,18 +71,74 @@ export default function ReportsPage() {
     return params.toString();
   }, [period, repId, team, approvalStatus, productId, categoryId]);
 
+  // Any filter change invalidates what's loaded so far - drop back to a
+  // fresh page 1 and clear the accumulated rows rather than appending onto
+  // a now-stale scroll session.
   useEffect(() => {
-    api
-      .get<Report>(`/reports/sales?${queryString}`)
-      .then(setReport)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load report'));
+    setPage(1);
+    setRows([]);
+    setPagination(null);
+    setInitialLoading(true);
   }, [queryString]);
 
-const handleExport = (format: 'xlsx' | 'pdf') => {
+  const pagedQueryString = useMemo(() => {
+    const params = new URLSearchParams(queryString);
+    params.set('page', String(page));
+    params.set('limit', String(PAGE_LIMIT));
+    return params.toString();
+  }, [queryString, page]);
+
+  useEffect(() => {
+    if (page > 1) setLoadingMore(true);
+    api
+      .get<Report>(`/reports/sales?${pagedQueryString}`)
+      .then((data) => {
+        setSummary(data.summary);
+        setPagination(data.pagination);
+        setRows((prev) => (data.pagination.page === 1 ? data.rows : [...prev, ...data.rows]));
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load report'))
+      .finally(() => {
+        setInitialLoading(false);
+        setLoadingMore(false);
+      });
+  }, [pagedQueryString]);
+
+  // Auto-pagination: load the next page as soon as the sentinel below the
+  // table scrolls into view, instead of a prev/next control.
+  useEffect(() => {
+    if (!pagination || pagination.page >= pagination.totalPages) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          setPage((p) => p + 1);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pagination, loadingMore]);
+
+  // Export covers exactly the rows already fetched via scrolling (not the
+  // whole filtered dataset): page 1 at a limit equal to how many rows are
+  // already loaded reproduces that same set deterministically.
+  const exportQueryString = useMemo(() => {
+    const params = new URLSearchParams(queryString);
+    params.set('page', '1');
+    params.set('limit', String(Math.max(rows.length, 1)));
+    return params.toString();
+  }, [queryString, rows.length]);
+
+  const handleExport = (format: 'xlsx' | 'pdf') => {
     const token = window.localStorage.getItem('dealflow360_access_token');
     const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001/api/v1';
     const path = format === 'pdf' ? '/reports/sales/export/pdf' : '/reports/sales/export';
-    fetch(`${base}${path}?${queryString}`, {
+    fetch(`${base}${path}?${exportQueryString}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.blob())
@@ -183,7 +251,7 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
         </label>
       </div>
 
-      {!report && !error && (
+      {initialLoading && !error && (
         <div className="admin-metric-row reports-page__loading">
           {[0, 1, 2].map((i) => (
             <div className="df-metric" key={i}>
@@ -194,31 +262,28 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
         </div>
       )}
 
-      {report && (
+      {!initialLoading && summary && pagination && (
         <>
           {/* Summary metrics */}
           <div className="admin-metric-row">
             <div className="df-metric">
               <div className="df-metric-label">Quotations</div>
-              <div className="df-metric-value text-num">{report.summary.totalQuotations}</div>
+              <div className="df-metric-value text-num">{summary.totalQuotations}</div>
               <div className="df-metric-sub">in selected period</div>
             </div>
             <div className="df-metric">
               <div className="df-metric-label">Total Net Value</div>
-              <div className="df-metric-value text-num">{money(report.summary.totalNetCents)}</div>
+              <div className="df-metric-value text-num">{money(summary.totalNetCents)}</div>
             </div>
             <div className="df-metric">
               <div className="df-metric-label">Avg Discount</div>
               <div
                 className="df-metric-value text-num"
                 style={{
-                  color:
-                    report.summary.avgDiscountPct > 20
-                      ? 'var(--amber)'
-                      : 'var(--text-primary)',
+                  color: summary.avgDiscountPct > 20 ? 'var(--amber)' : 'var(--text-primary)',
                 }}
               >
-                {report.summary.avgDiscountPct}%
+                {summary.avgDiscountPct}%
               </div>
             </div>
           </div>
@@ -230,9 +295,11 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
                 <BarChart2 size={14} color="var(--accent)" />
                 Quotation Breakdown
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{report.rows.length} rows</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                {pagination.total === 0 ? '0 rows' : `${rows.length} of ${pagination.total} rows`}
+              </span>
             </div>
-            {report.rows.length === 0 ? (
+            {rows.length === 0 ? (
               <div className="df-empty" style={{ padding: '32px' }}>
                 <div className="df-empty-title">No data for this period</div>
                 <div className="df-empty-desc">Try switching the filters above.</div>
@@ -249,7 +316,7 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
                   </tr>
                 </thead>
                 <tbody>
-                  {report.rows.map((r) => (
+                  {rows.map((r) => (
                     <tr key={r.quote_no}>
                       <td>
                         <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.quote_no}</span>
@@ -265,10 +332,7 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
                         <span
                           style={{
                             fontWeight: 600,
-                            color:
-                              r.effective_discount_pct > 20
-                                ? 'var(--amber)'
-                                : 'var(--text-primary)',
+                            color: r.effective_discount_pct > 20 ? 'var(--amber)' : 'var(--text-primary)',
                           }}
                         >
                           {r.effective_discount_pct}%
@@ -276,9 +340,20 @@ const handleExport = (format: 'xlsx' | 'pdf') => {
                       </td>
                     </tr>
                   ))}
+                  {loadingMore &&
+                    Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                      <tr key={`skeleton-${i}`}>
+                        <td><div className="skeleton" style={{ height: 13, width: '80%' }} /></td>
+                        <td><div className="skeleton" style={{ height: 13, width: '60%' }} /></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: 13, width: 24, marginLeft: 'auto' }} /></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: 13, width: 60, marginLeft: 'auto' }} /></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: 13, width: 40, marginLeft: 'auto' }} /></td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             )}
+            {pagination.page < pagination.totalPages && <div ref={sentinelRef} style={{ height: 1 }} />}
           </div>
         </>
       )}

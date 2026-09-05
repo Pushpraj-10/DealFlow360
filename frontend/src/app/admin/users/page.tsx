@@ -1,18 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
-import { AlertCircle, Check, Inbox, UserPlus, X } from 'lucide-react';
-
-type InternalUser = {
-  _id: string;
-  fullName: string;
-  email: string;
-  role: string;
-  status: string;
-  createdAt: string;
-};
+import { AlertCircle, Check, History, Inbox, UserPlus, X } from 'lucide-react';
 
 type Reviewer = { _id: string; fullName: string; email: string } | null;
 
@@ -33,19 +25,12 @@ function formatRole(role: string) {
   return role.replace(/_/g, ' ');
 }
 
-function statusClass(status: string) {
-  if (status === 'APPROVED') return 'status-active';
-  if (status === 'REJECTED') return 'status-rejected';
-  return 'status-pending';
-}
-
 export default function UsersPage() {
   const { user } = useAuth();
   // Mirrors the backend's requireRoles(ADMIN) guard on /users and
   // /users/signup-requests: only an admin reviews requests or sees accounts.
   const isAdmin = user?.role === 'ADMIN';
-  const [users, setUsers] = useState<InternalUser[]>([]);
-  const [requests, setRequests] = useState<SignupRequest[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<SignupRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingOnId, setActingOnId] = useState<string | null>(null);
@@ -53,22 +38,14 @@ export default function UsersPage() {
   const [rejectReason, setRejectReason] = useState('');
 
   const load = () => {
-    Promise.all([
-      api.get<{ users: InternalUser[] }>('/users'),
-      api.get<{ requests: SignupRequest[] }>('/users/signup-requests'),
-    ])
-      .then(([usersData, requestsData]) => {
-        setUsers(usersData.users);
-        setRequests(requestsData.requests);
-      })
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load users'))
+    api
+      .get<{ requests: SignupRequest[] }>('/users/signup-requests?status=PENDING')
+      .then((d) => setPendingRequests(d.requests))
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load signup requests'))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
-
-  const pendingRequests = requests.filter((r) => r.status === 'PENDING');
-  const decidedRequests = requests.filter((r) => r.status !== 'PENDING');
 
   const handleApprove = async (request: SignupRequest) => {
     setError(null);
@@ -125,6 +102,10 @@ export default function UsersPage() {
           <h1>Internal Users</h1>
           <p>Anyone can request an internal account and propose a role and team. Approving here is what actually creates the account.</p>
         </div>
+        <Link href="/admin/users/history" className="btn btn-ghost">
+          <History size={14} />
+          Request History
+        </Link>
       </div>
 
       {error && (
@@ -192,83 +173,6 @@ export default function UsersPage() {
                         Reject
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {decidedRequests.length > 0 && (
-        <div className="admin-panel users-page__panel" style={{ marginTop: 18 }}>
-          <div className="admin-panel-header">
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Reviewed requests</span>
-          </div>
-          <table className="df-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Proposed role</th>
-                <th>Status</th>
-                <th>Reviewed by</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {decidedRequests.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.fullName}</td>
-                  <td>{r.email}</td>
-                  <td>{formatRole(r.proposedRole)}</td>
-                  <td>
-                    <span className={`status-badge ${statusClass(r.status)}`}>{r.status}</span>
-                  </td>
-                  <td>{r.reviewedById?.fullName || '—'}</td>
-                  <td style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{r.reviewNote || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="admin-panel users-page__panel" style={{ marginTop: 18 }}>
-        <div className="admin-panel-header">
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Active accounts</span>
-          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{users.length} total</span>
-        </div>
-        {loading ? (
-          <div style={{ padding: '18px' }}>
-            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
-            <div className="skeleton" style={{ height: 16, width: '60%' }} />
-          </div>
-        ) : users.length === 0 ? (
-          <div className="df-empty">
-            <UserPlus size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
-            <div className="df-empty-title">No internal users yet</div>
-          </div>
-        ) : (
-          <table className="df-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u._id}>
-                  <td style={{ fontWeight: 500 }}>{u.fullName}</td>
-                  <td>{u.email}</td>
-                  <td>{formatRole(u.role)}</td>
-                  <td>
-                    <span className={`status-badge ${u.status === 'ACTIVE' ? 'status-active' : 'status-draft'}`}>
-                      {u.status}
-                    </span>
                   </td>
                 </tr>
               ))}

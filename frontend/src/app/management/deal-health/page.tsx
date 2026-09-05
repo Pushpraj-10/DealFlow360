@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertCircle, AlertTriangle, Send, TrendingDown, Zap } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
 
@@ -14,6 +14,12 @@ type Alert = {
   created_at?: string;
   updated_at?: string;
 };
+
+type Pagination = { page: number; limit: number; total: number; totalPages: number };
+type AlertsResponse = { alerts: Alert[]; pagination: Pagination };
+
+const PAGE_LIMIT = 20;
+const SKELETON_ROWS = 3;
 
 const alertTypeConfig = {
   STALLED: {
@@ -61,29 +67,70 @@ function detailsText(details: Record<string, unknown>) {
 
 export default function DealHealthPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: PAGE_LIMIT, total: 0, totalPages: 1 });
+  const [page, setPage] = useState(1);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loadedAt] = useState(() => Date.now());
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const load = () => {
-    const params = new URLSearchParams();
+  const filterKey = `${typeFilter}|${severityFilter}|${statusFilter}`;
+
+  // A filter change invalidates what's loaded so far - drop back to a fresh
+  // page 1 rather than appending onto a stale scroll session.
+  useEffect(() => {
+    setPage(1);
+    setAlerts([]);
+    setInitialLoading(true);
+  }, [filterKey]);
+
+  const fetchPage = (targetPage: number, { append }: { append: boolean }) => {
+    const params = new URLSearchParams({ page: String(targetPage), limit: String(PAGE_LIMIT) });
     if (typeFilter) params.set('type', typeFilter);
     if (severityFilter) params.set('severity', severityFilter);
     if (statusFilter) params.set('status', statusFilter);
 
-    api
-      .get<Alert[]>(`/deal-health${params.toString() ? `?${params}` : ''}`)
-      .then(setAlerts)
-      .catch((err) =>
-        setError(err instanceof ApiClientError ? err.message : 'Failed to load alerts')
-      )
-      .finally(() => setLoading(false));
+    return api
+      .get<AlertsResponse>(`/deal-health?${params}`)
+      .then((data) => {
+        setAlerts((prev) => (append ? [...prev, ...data.alerts] : data.alerts));
+        setPagination(data.pagination);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load alerts'));
   };
 
-  useEffect(load, [typeFilter, severityFilter, statusFilter]);
+  useEffect(() => {
+    if (page > 1) setLoadingMore(true);
+    fetchPage(page, { append: page > 1 }).finally(() => {
+      setInitialLoading(false);
+      setLoadingMore(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey, page]);
+
+  // Auto-pagination: load the next page as soon as the sentinel below the
+  // table scrolls into view, instead of a prev/next control.
+  useEffect(() => {
+    if (page >= pagination.totalPages) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          setPage((p) => p + 1);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [page, pagination.totalPages, loadingMore]);
 
   const handleAction = async (id: string, action: 'nudge' | 'escalate') => {
     try {
@@ -93,7 +140,16 @@ export default function DealHealthPage() {
           ? { message: 'Please follow up' }
           : { reason: 'Escalated from dashboard' }
       );
-      load();
+      // Re-pull exactly the rows already loaded (page 1 at the accumulated
+      // count) so the acted-on row's status updates in place without losing
+      // scroll position or re-triggering the append-on-scroll flow.
+      const params = new URLSearchParams({ page: '1', limit: String(Math.max(alerts.length, PAGE_LIMIT)) });
+      if (typeFilter) params.set('type', typeFilter);
+      if (severityFilter) params.set('severity', severityFilter);
+      if (statusFilter) params.set('status', statusFilter);
+      const data = await api.get<AlertsResponse>(`/deal-health?${params}`);
+      setAlerts(data.alerts);
+      setPagination(data.pagination);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Action failed');
     }
@@ -110,7 +166,7 @@ export default function DealHealthPage() {
         <div>
           <p className="admin-eyebrow">Insights</p>
           <h1>Deal Health</h1>
-          <p>{alerts.length} deal{alerts.length === 1 ? '' : 's'} need attention</p>
+          <p>{pagination.total} deal{pagination.total === 1 ? '' : 's'} need attention</p>
         </div>
       </div>
 
@@ -149,10 +205,10 @@ export default function DealHealthPage() {
             <p className="admin-eyebrow">Action Center</p>
             <h2>Prioritized alerts</h2>
           </div>
-          <span>{sortedAlerts.length} total</span>
+          <span>{pagination.total} total</span>
         </div>
 
-        {loading ? (
+        {initialLoading ? (
           <div style={{ padding: '18px' }}>
             <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
             <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
@@ -216,8 +272,20 @@ export default function DealHealthPage() {
                     </tr>
                   );
                 })}
+                {loadingMore &&
+                  Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                    <tr key={`skeleton-${i}`}>
+                      <td><div className="skeleton" style={{ height: 13, width: 50 }} /></td>
+                      <td><div className="skeleton" style={{ height: 13, width: '70%' }} /></td>
+                      <td><div className="skeleton" style={{ height: 13, width: '80%' }} /></td>
+                      <td><div className="skeleton" style={{ height: 13, width: 50 }} /></td>
+                      <td><div className="skeleton" style={{ height: 13, width: 70 }} /></td>
+                      <td></td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
+            {page < pagination.totalPages && <div ref={sentinelRef} style={{ height: 1 }} />}
           </div>
         )}
       </section>

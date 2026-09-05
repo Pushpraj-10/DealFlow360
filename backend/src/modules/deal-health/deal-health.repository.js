@@ -39,7 +39,14 @@ const findHistoricalQuotationsByOwner = (salesRepId, excludeQuotationId, limit) 
 
 const findFulfillmentByQuotationId = (quotationId) => Fulfillment.findOne({ quotation_id: quotationId });
 
-const findAlerts = (filter = {}) => DealAlert.find(filter).sort({ created_at: -1 });
+const findAlerts = (filter = {}, { skip, limit } = {}) => {
+    let query = DealAlert.find(filter).sort({ created_at: -1 });
+    if (skip) query = query.skip(skip);
+    if (limit) query = query.limit(limit);
+    return query;
+};
+
+const countAlerts = (filter = {}) => DealAlert.countDocuments(filter);
 
 const findAlertById = (id) => DealAlert.findById(id);
 
@@ -77,6 +84,7 @@ export {
     findHistoricalQuotationsByOwner,
     findFulfillmentByQuotationId,
     findAlerts,
+    countAlerts,
     findAlertById,
     findExistingOpenAlert,
     createAlert,

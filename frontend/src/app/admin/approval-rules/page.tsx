@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
-import { AlertCircle, Plus, FileCheck } from 'lucide-react';
+import { AlertCircle, Plus, FileCheck, Trash2 } from 'lucide-react';
 
 type Rule = {
   _id: string;
@@ -31,6 +31,7 @@ export default function ApprovalRulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     minRiskScore: '0',
@@ -69,6 +70,22 @@ export default function ApprovalRulesPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create rule');
+    }
+  };
+
+  const handleDelete = async (rule: Rule) => {
+    if (!window.confirm(`Delete "${rule.name}"? It will be deactivated and stop matching new quotations.`)) {
+      return;
+    }
+    setError(null);
+    setDeletingId(rule._id);
+    try {
+      await api.del(`/approvals/rules/${rule._id}`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to delete rule');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -116,6 +133,7 @@ export default function ApprovalRulesPage() {
                 <th>Risk Range</th>
                 <th>Severity</th>
                 <th>Approval Flow</th>
+                {canManage && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -145,6 +163,19 @@ export default function ApprovalRulesPage() {
                       )}
                     </div>
                   </td>
+                  {canManage && (
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        onClick={() => handleDelete(r)}
+                        disabled={!r.isActive || deletingId === r._id}
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: r.isActive ? 'var(--red)' : 'var(--text-tertiary)' }}
+                        title={r.isActive ? 'Delete rule' : 'Already deactivated'}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

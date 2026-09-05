@@ -108,12 +108,28 @@ const evaluateQuotation = async (quotation) => {
     return triggered;
 };
 
+const DEFAULT_PAGE_SIZE = 20;
+// Bounds a single page fetch, but also doubles as the export cap: the
+// frontend re-requests page=1 with limit=<rows already loaded via infinite
+// scroll> so export matches exactly what's on screen, so this needs to be
+// generous enough to cover a long scroll session rather than just one page.
+const MAX_PAGE_SIZE = 500;
+
+// Clamps and defaults page/limit query params shared by both paginated
+// endpoints (alerts list, sales report) so an invalid or absurdly large
+// value from the client can't blow up a query.
+const resolvePagination = (page, limit) => {
+    const pageNum = Math.max(1, Math.trunc(Number(page)) || 1);
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(Number(limit)) || DEFAULT_PAGE_SIZE));
+    return { page: pageNum, limit: pageSize };
+};
+
 /**
  * Compute-on-read: scans open quotations, creates any newly-triggered
  * alerts (idempotently - skips a type already OPEN for a quote), then
- * returns the current alert list filtered per the caller's query.
+ * returns a page of the current alert list filtered per the caller's query.
  */
-const scanAndListAlerts = async ({ type, severity, status } = {}) => {
+const scanAndListAlerts = async ({ type, severity, status, page, limit } = {}) => {
     const quotations = await dealHealthRepository.findOpenQuotations();
 
     for (const quotation of quotations) {
@@ -144,7 +160,16 @@ const scanAndListAlerts = async ({ type, severity, status } = {}) => {
     if (severity) filter.severity = severity;
     filter.status = status || { $in: ['OPEN', 'ACKNOWLEDGED'] };
 
-    return dealHealthRepository.findAlerts(filter);
+    const { page: pageNum, limit: pageSize } = resolvePagination(page, limit);
+    const [alerts, total] = await Promise.all([
+        dealHealthRepository.findAlerts(filter, { skip: (pageNum - 1) * pageSize, limit: pageSize }),
+        dealHealthRepository.countAlerts(filter),
+    ]);
+
+    return {
+        alerts,
+        pagination: { page: pageNum, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    };
 };
 
 const getAlertOrThrow = async (id) => {
@@ -316,25 +341,40 @@ const getSalesReportFilters = async () => {
     };
 };
 
+const summarizeRows = (rows) => ({
+    totalQuotations: rows.length,
+    totalNetCents: rows.reduce((sum, r) => sum + r.net_cents, 0),
+    avgDiscountPct:
+        rows.length > 0
+            ? Number((rows.reduce((sum, r) => sum + r.effective_discount_pct, 0) / rows.length).toFixed(2))
+            : 0,
+});
+
+// The dashboard summary (quotations/net/avg discount) stays computed over the
+// FULL filtered set, independent of which page is being viewed - only the
+// row table itself is sliced to the requested page.
 const getSalesReport = async (filters) => {
     const rows = await buildSalesReportRows(filters);
+    const { page: pageNum, limit: pageSize } = resolvePagination(filters.page, filters.limit);
+    const total = rows.length;
+    const start = (pageNum - 1) * pageSize;
+
     return {
-        rows,
-        summary: {
-            totalQuotations: rows.length,
-            totalNetCents: rows.reduce((sum, r) => sum + r.net_cents, 0),
-            avgDiscountPct:
-                rows.length > 0
-                    ? Number((rows.reduce((sum, r) => sum + r.effective_discount_pct, 0) / rows.length).toFixed(2))
-                    : 0,
-        },
+        rows: rows.slice(start, start + pageSize),
+        summary: summarizeRows(rows),
+        pagination: { page: pageNum, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
     };
 };
 
-// PRD section A7 asks for PDF/XLS export. buildSalesReportWorkbook below
-// covers XLSX; buildSalesReportPdf covers the print-formatted PDF.
+// PRD section A7 asks for PDF/XLS export. Export is scoped to exactly the
+// same page/limit the caller is currently viewing (not the whole filtered
+// set) so a download always matches what's actually on screen rather than
+// silently re-fetching and exporting everything.
 const buildSalesReportWorkbook = async (filters) => {
-    const rows = await buildSalesReportRows(filters);
+    const allRows = await buildSalesReportRows(filters);
+    const { page: pageNum, limit: pageSize } = resolvePagination(filters.page, filters.limit);
+    const start = (pageNum - 1) * pageSize;
+    const rows = allRows.slice(start, start + pageSize);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'DealFlow360';
@@ -384,7 +424,10 @@ const PDF_REPORT_COLUMNS = [
 ];
 
 const buildSalesReportPdf = async (filters) => {
-    const rows = await buildSalesReportRows(filters);
+    const allRows = await buildSalesReportRows(filters);
+    const { page: pageNum, limit: pageSize } = resolvePagination(filters.page, filters.limit);
+    const start = (pageNum - 1) * pageSize;
+    const rows = allRows.slice(start, start + pageSize);
 
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 40 });

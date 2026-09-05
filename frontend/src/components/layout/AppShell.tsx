@@ -6,7 +6,7 @@ import { Sidebar } from './Sidebar';
 import { UserMenu } from './UserMenu';
 import { findActiveLabel, getNavigation } from './navigation';
 import { useAuth } from '@/lib/useAuth';
-import { Bell, Menu, MessageSquare, PanelLeft, Quote, UserRound, X } from 'lucide-react';
+import { Bell, Menu, PanelLeft, X } from 'lucide-react';
 
 // Rendered without the app shell and reachable while signed out.
 const PUBLIC_ROUTES = ['/login', '/landing'];
@@ -76,23 +76,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="df-brand-mark">D</span>
             <span>DealFlow360</span>
           </a>
-          <nav className="portal-nav" aria-label="Customer portal navigation">
-            <a className={pathname === '/portal' ? 'active' : ''} href="/portal">
-              <Quote size={14} />
-              My Quote
-            </a>
-            <a
-              className={pathname.includes('/quotation') ? 'active' : ''}
-              href={pathname.startsWith('/portal/quotation') ? `${pathname}#messages` : '/portal'}
-            >
-              <MessageSquare size={14} />
-              Messages
-            </a>
-            <a href={pathname.startsWith('/portal/quotation') ? `${pathname}#profile` : '/portal'}>
-              <UserRound size={14} />
-              Profile
-            </a>
-          </nav>
           {user && <UserMenu user={user} onLogout={logout} />}
         </header>
         <main className="portal-main">{children}</main>

@@ -37,6 +37,113 @@ const listSignupRequests = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {requests: requests.map((r) => r.toSafeObject())}, 'Signup requests fetched successfully'));
 });
 
+const DIRECTORY_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'APPROVED', 'REJECTED'];
+
+// Admin-only: one row per person, merging their account (if any) with their
+// most recent reviewed (non-pending) signup request (if any) - matched by
+// email, since a rejected request never gets a User and a seeded account
+// never gets a request. Filter/search/pagination all apply after the merge
+// since the two sources have to be combined before either makes sense.
+const listUserDirectory = asyncHandler(async (req, res) => {
+    const {search, role, status, page, limit} = req.query;
+
+    if (role && !Object.values(USER_ROLES).includes(role)) {
+        throw new ApiError(400, 'Invalid role filter');
+    }
+
+    if (status && !DIRECTORY_STATUS_VALUES.includes(status)) {
+        throw new ApiError(400, 'status must be one of: ' + DIRECTORY_STATUS_VALUES.join(', '));
+    }
+
+    const [users, requests] = await Promise.all([
+        User.find(role ? {role} : {}),
+        UserSignupRequest.find({
+            status: {$in: [SIGNUP_REQUEST_STATUSES.APPROVED, SIGNUP_REQUEST_STATUSES.REJECTED]},
+            ...(role ? {proposedRole: role} : {})
+        })
+        .populate('reviewedById', 'fullName email')
+        .sort({createdAt: -1})
+    ]);
+
+    const rowsByEmail = new Map();
+
+    for (const user of users) {
+        rowsByEmail.set(user.email, {
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+            accountStatus: user.status,
+            lastRequestStatus: null,
+            lastRequestAt: null,
+            reviewedBy: null,
+            reviewNote: null,
+            sortDate: user.createdAt
+        });
+    }
+
+    // requests is already sorted most-recent-first, so the first request
+    // seen per email is that person's latest reviewed request.
+    const seenRequestEmails = new Set();
+
+    for (const request of requests) {
+        if (seenRequestEmails.has(request.email)) {
+            continue;
+        }
+        seenRequestEmails.add(request.email);
+
+        const requestDate = request.reviewedAt || request.createdAt;
+        const existing = rowsByEmail.get(request.email);
+
+        if (existing) {
+            existing.lastRequestStatus = request.status;
+            existing.lastRequestAt = requestDate;
+            existing.reviewedBy = request.reviewedById;
+            existing.reviewNote = request.reviewNote;
+            if (requestDate > existing.sortDate) {
+                existing.sortDate = requestDate;
+            }
+        } else {
+            rowsByEmail.set(request.email, {
+                fullName: request.fullName,
+                email: request.email,
+                role: request.proposedRole,
+                accountStatus: null,
+                lastRequestStatus: request.status,
+                lastRequestAt: requestDate,
+                reviewedBy: request.reviewedById,
+                reviewNote: request.reviewNote,
+                sortDate: requestDate
+            });
+        }
+    }
+
+    let rows = [...rowsByEmail.values()];
+
+    if (search && search.trim()) {
+        const term = search.trim().toLowerCase();
+        rows = rows.filter((row) => row.fullName.toLowerCase().includes(term) || row.email.toLowerCase().includes(term));
+    }
+
+    if (status) {
+        rows = rows.filter((row) => row.accountStatus === status || row.lastRequestStatus === status);
+    }
+
+    rows.sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
+
+    const {page: pageNum, limit: pageSize} = resolvePagination(page, limit);
+    const total = rows.length;
+    const paged = rows
+    .slice((pageNum - 1) * pageSize, pageNum * pageSize)
+    .map(({sortDate, ...row}) => row);
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {
+        rows: paged,
+        pagination: {page: pageNum, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize))}
+    }, 'User directory fetched successfully'));
+});
+
 const getPendingSignupRequestOrThrow = async (requestId) => {
     const request = await UserSignupRequest.findById(requestId).select('+passwordHash');
 
@@ -104,4 +211,4 @@ const rejectSignupRequest = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {request: request.toSafeObject()}, 'Signup request rejected'));
 });
 
-export {listUsers, listSignupRequests, approveSignupRequest, rejectSignupRequest};
+export {listUsers, listSignupRequests, listUserDirectory, approveSignupRequest, rejectSignupRequest};
