@@ -28,4 +28,14 @@ const updateWarehouse = async (id, data) => {
     return warehouse;
 };
 
-export { listWarehouses, createWarehouse, updateWarehouse };
+const deleteWarehouse = async (id) => {
+    // Warehouses are referenced by inventory and fulfillment records, so
+    // deleting one deactivates it instead of removing the row.
+    const warehouse = await warehouseRepository.updateById(id, { active: false });
+    if (!warehouse) {
+        throw new ApiError(404, 'Warehouse not found', [], '', ErrorCodes.NOT_FOUND);
+    }
+    return warehouse;
+};
+
+export { listWarehouses, createWarehouse, updateWarehouse, deleteWarehouse };

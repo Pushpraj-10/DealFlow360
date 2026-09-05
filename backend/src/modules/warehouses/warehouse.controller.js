@@ -17,4 +17,9 @@ const updateWarehouse = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, warehouse, 'Warehouse updated'));
 });
 
-export { listWarehouses, createWarehouse, updateWarehouse };
+const deleteWarehouse = asyncHandler(async (req, res) => {
+    const warehouse = await warehouseService.deleteWarehouse(req.params.id);
+    return res.status(200).json(new ApiResponse(200, warehouse, 'Warehouse deactivated'));
+});
+
+export { listWarehouses, createWarehouse, updateWarehouse, deleteWarehouse };
