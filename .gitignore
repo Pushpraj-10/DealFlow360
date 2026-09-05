@@ -1,5 +1,6 @@
 PLAN.md
 .playwright-mcp
+node_modules/
 
 # Playwright test artifacts
 /playwright-report/
