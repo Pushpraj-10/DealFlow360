@@ -1,8 +1,8 @@
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
-import {INTERNAL_ROLES, USER_ROLES, USER_STATUSES} from '../../core/constants.js';
-import {hashPassword, signSessionToken, verifyPassword} from './auth.service.js';
+import {USER_STATUSES} from '../../core/constants.js';
+import {signSessionToken, verifyPassword} from './auth.service.js';
 import {User} from '../users/user.model.js';
 
 const COOKIE_OPTIONS = {
@@ -10,8 +10,6 @@ const COOKIE_OPTIONS = {
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production'
 };
-
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const sendAuthResponse = (res, statusCode, user, message) => {
     const accessToken = signSessionToken(user);
@@ -21,42 +19,6 @@ const sendAuthResponse = (res, statusCode, user, message) => {
     .cookie('accessToken', accessToken, COOKIE_OPTIONS)
     .json(new ApiResponse(statusCode, {user: user.toSafeObject(), accessToken}, message));
 };
-
-const signupInternalUser = asyncHandler(async (req, res) => {
-    const {fullName, email, password, role = USER_ROLES.SALES_REP} = req.body;
-
-    if (!fullName?.trim() || !email?.trim() || !password) {
-        throw new ApiError(400, 'Full name, email, and password are required');
-    }
-
-    if (!isValidEmail(email)) {
-        throw new ApiError(400, 'A valid email is required');
-    }
-
-    if (password.length < 8) {
-        throw new ApiError(400, 'Password must be at least 8 characters');
-    }
-
-    if (!INTERNAL_ROLES.includes(role)) {
-        throw new ApiError(400, 'Internal signup cannot create customer users');
-    }
-
-    const existingUser = await User.findOne({email: email.toLowerCase()});
-
-    if (existingUser) {
-        throw new ApiError(409, 'An account already exists for this email');
-    }
-
-    const user = await User.create({
-        fullName,
-        email,
-        passwordHash: hashPassword(password),
-        role,
-        status: USER_STATUSES.ACTIVE
-    });
-
-    return sendAuthResponse(res, 201, user, 'Internal user created successfully');
-});
 
 const login = asyncHandler(async (req, res) => {
     const {email, password} = req.body;
@@ -95,7 +57,6 @@ const logout = asyncHandler(async (req, res) => {
 });
 
 export {
-    signupInternalUser,
     login,
     getCurrentUser,
     logout

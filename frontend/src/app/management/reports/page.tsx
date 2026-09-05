@@ -1,14 +1,22 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, Download, BarChart2 } from 'lucide-react';
+import { AlertCircle, Download, BarChart2, FileText } from 'lucide-react';
 
 type ReportRow = { quote_no: string; status: string; line_count: number; gross_cents: number; net_cents: number; effective_discount_pct: number };
 type Report = { rows: ReportRow[]; summary: { totalQuotations: number; totalNetCents: number; avgDiscountPct: number } };
+type SalesRep = { id: string; fullName: string; email: string; team: string | null };
+type ReportFilterOptions = { reps: SalesRep[]; teams: string[]; approvalStatuses: string[] };
+type Product = { _id: string; name: string };
+type Category = { _id: string; name: string };
 
 function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatStatus(status: string) {
+  return status.replace(/_/g, ' ');
 }
 
 function getStatusClass(status: string): string {
@@ -23,20 +31,47 @@ function getStatusClass(status: string): string {
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState('all');
+  const [repId, setRepId] = useState('');
+  const [team, setTeam] = useState('');
+  const [approvalStatus, setApprovalStatus] = useState('');
+  const [productId, setProductId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+
+  const [filterOptions, setFilterOptions] = useState<ReportFilterOptions | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    api.get<ReportFilterOptions>('/reports/sales/filters').then(setFilterOptions).catch(() => {});
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
+    api.get<{ categories: Category[] }>('/categories').then((d) => setCategories(d.categories)).catch(() => {});
+  }, []);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams({ period });
+    if (repId) params.set('repId', repId);
+    if (team) params.set('team', team);
+    if (approvalStatus) params.set('approvalStatus', approvalStatus);
+    if (productId) params.set('product', productId);
+    if (categoryId) params.set('category', categoryId);
+    return params.toString();
+  }, [period, repId, team, approvalStatus, productId, categoryId]);
+
+  useEffect(() => {
+    setReport(null);
     api
-      .get<Report>(`/reports/sales?period=${period}`)
+      .get<Report>(`/reports/sales?${queryString}`)
       .then(setReport)
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load report'));
-  }, [period]);
+  }, [queryString]);
 
-  const handleExport = () => {
+const handleExport = (format: 'xlsx' | 'pdf') => {
     const token = window.localStorage.getItem('dealflow360_access_token');
     const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001/api/v1';
-    fetch(`${base}/reports/sales/export?period=${period}`, {
+    const path = format === 'pdf' ? '/reports/sales/export/pdf' : '/reports/sales/export';
+    fetch(`${base}${path}?${queryString}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.blob())
@@ -44,7 +79,7 @@ export default function ReportsPage() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'sales-report.xlsx';
+        a.download = `sales-report.${format}`;
         a.click();
       });
   };
@@ -57,10 +92,16 @@ export default function ReportsPage() {
           <h1>Sales Reports</h1>
           <p>Quotation performance, net value, and discount analytics.</p>
         </div>
-        <button onClick={handleExport} className="btn btn-secondary" style={{ gap: 7 }}>
-          <Download size={13} />
-          Export XLSX
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => handleExport('xlsx')} className="btn btn-secondary" style={{ gap: 7 }}>
+            <Download size={13} />
+            Export XLSX
+          </button>
+          <button onClick={() => handleExport('pdf')} className="btn btn-secondary" style={{ gap: 7 }}>
+            <FileText size={13} />
+            Export PDF
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -71,7 +112,7 @@ export default function ReportsPage() {
       )}
 
       {/* Period filter */}
-      <div className="admin-filter-row">
+      <div className="admin-filter-row reports-page__period-row">
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Period:</span>
         {['all', 'today', 'week'].map((p) => (
           <button
@@ -92,6 +133,55 @@ export default function ReportsPage() {
             {p === 'all' ? 'All time' : p.charAt(0).toUpperCase() + p.slice(1)}
           </button>
         ))}
+      </div>
+
+      {/* Additional report filters (PRD A7): Sales Team / Rep, Approval Status, Product / Category */}
+      <div className="admin-filter-row reports-page__filter-row">
+        <label className="reports-page__filter-field">
+          <span>Sales Rep</span>
+          <select value={repId} onChange={(e) => setRepId(e.target.value)} className="df-select">
+            <option value="">All reps</option>
+            {(filterOptions?.reps || []).map((rep) => (
+              <option key={rep.id} value={rep.id}>{rep.fullName}</option>
+            ))}
+          </select>
+        </label>
+        <label className="reports-page__filter-field">
+          <span>Team</span>
+          <select value={team} onChange={(e) => setTeam(e.target.value)} className="df-select">
+            <option value="">All teams</option>
+            {(filterOptions?.teams || []).map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        <label className="reports-page__filter-field">
+          <span>Approval Status</span>
+          <select value={approvalStatus} onChange={(e) => setApprovalStatus(e.target.value)} className="df-select">
+            <option value="">All approval statuses</option>
+            {(filterOptions?.approvalStatuses || []).map((status) => (
+              <option key={status} value={status}>{formatStatus(status)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="reports-page__filter-field">
+          <span>Category</span>
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="df-select">
+            <option value="">All categories</option>
+            {categories.map((category) => (
+              <option key={category._id} value={category._id}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="reports-page__filter-field">
+          <span>Product</span>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className="df-select">
+            <option value="">All products</option>
+            {products.map((product) => (
+              <option key={product._id} value={product._id}>{product.name}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {!report && !error && (
@@ -146,7 +236,7 @@ export default function ReportsPage() {
             {report.rows.length === 0 ? (
               <div className="df-empty" style={{ padding: '32px' }}>
                 <div className="df-empty-title">No data for this period</div>
-                <div className="df-empty-desc">Try switching the period filter above.</div>
+                <div className="df-empty-desc">Try switching the filters above.</div>
               </div>
             ) : (
               <table className="df-table">

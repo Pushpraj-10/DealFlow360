@@ -10,6 +10,9 @@ import {
   ChevronRight,
   Plus,
   Search,
+  Sparkles,
+  TrendingUp,
+  X,
 } from 'lucide-react';
 import {
   formatStatus,
@@ -57,6 +60,42 @@ type QuotationDetail = {
   marginPercentage?: number;
 };
 
+type UpsellRecommendation = {
+  product: { id: string; name: string; productType?: string; billingType?: string; unit?: string };
+  coPurchaseScore: number;
+  promotionBoost: number;
+  rankScore: number;
+  expectedRevenue: number;
+  estimatedMarginDelta: number;
+  estimatedMarginPercent: number;
+};
+
+type OrderSnapshotSubscription = {
+  id: string;
+  status: string;
+  qty: number;
+  recurringUnitPriceCents: number;
+  nextBillDate: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  plan: { id: string; name: string; cycle: string } | null;
+};
+
+type OrderSnapshotLine = {
+  quotationLineId: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  type: 'ONE_TIME' | 'RECURRING';
+  subscription: OrderSnapshotSubscription | null;
+};
+
+type OrderSnapshot = {
+  quotationId: string;
+  currency: string;
+  lines: OrderSnapshotLine[];
+};
+
 export default function QuotationsPage() {
   const { user } = useAuth();
   // Mirrors the backend's requireRoles() guards on /quotations (quotations.routes.js):
@@ -76,6 +115,17 @@ export default function QuotationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<UpsellRecommendation[]>([]);
+  const [recommendationsCurrency, setRecommendationsCurrency] = useState('USD');
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [dismissedRecommendationIds, setDismissedRecommendationIds] = useState<Set<string>>(new Set());
+  const [acceptingRecommendationId, setAcceptingRecommendationId] = useState<string | null>(null);
+  const [orderSnapshot, setOrderSnapshot] = useState<OrderSnapshot | null>(null);
+  const [orderSnapshotLoading, setOrderSnapshotLoading] = useState(false);
+  const [modifyTarget, setModifyTarget] = useState<OrderSnapshotSubscription | null>(null);
+  const [modifyQty, setModifyQty] = useState(1);
+  const [modifyProrationPreview, setModifyProrationPreview] = useState<number | null>(null);
+  const [subscriptionActionId, setSubscriptionActionId] = useState<string | null>(null);
 
   const loadQuotations = () => {
     api
@@ -103,6 +153,18 @@ export default function QuotationsPage() {
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotation lines'));
   };
 
+  const loadRecommendations = (id: string) => {
+    setRecommendationsLoading(true);
+    api
+      .get<{ recommendations: UpsellRecommendation[]; currencyCode?: string }>(`/recommendations/quotations/${id}/upsells`)
+      .then((d) => {
+        setRecommendations(d.recommendations || []);
+        setRecommendationsCurrency(d.currencyCode || 'USD');
+      })
+      .catch(() => setRecommendations([]))
+      .finally(() => setRecommendationsLoading(false));
+  };
+
   useEffect(() => {
     queueMicrotask(() => {
       const quoteId = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('quote');
@@ -110,7 +172,9 @@ export default function QuotationsPage() {
       setSelectedId(quoteId);
       setLines([]);
       setQuotationDetail(null);
+      setDismissedRecommendationIds(new Set());
       loadLines(quoteId);
+      loadRecommendations(quoteId);
     });
   }, [selectedId]);
 
@@ -143,9 +207,39 @@ export default function QuotationsPage() {
       setLines(data.lines);
       setQuotationDetail(data.quotation || null);
       loadQuotations();
+      loadRecommendations(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add line');
     }
+  };
+
+  const acceptRecommendation = async (recommendation: UpsellRecommendation) => {
+    if (!selectedId) return;
+    setError(null);
+    setInfo(null);
+    setAcceptingRecommendationId(recommendation.product.id);
+    try {
+      const data = await api.post<{
+        quotation: any;
+        lines: QuotationLine[];
+        marginImpact: { estimatedMarginDelta: number; newMarginPercentage: number };
+      }>(`/recommendations/quotations/${selectedId}/upsells`, { productId: recommendation.product.id });
+      setLines(data.lines);
+      setQuotationDetail(data.quotation || null);
+      setInfo(
+        `Added ${recommendation.product.name} to the quote - margin ${data.marginImpact.estimatedMarginDelta >= 0 ? '+' : ''}${money(data.marginImpact.estimatedMarginDelta, recommendationsCurrency)}, quote margin now ${data.marginImpact.newMarginPercentage?.toFixed(1)}%.`
+      );
+      loadQuotations();
+      loadRecommendations(selectedId);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to add recommendation to quote');
+    } finally {
+      setAcceptingRecommendationId(null);
+    }
+  };
+
+  const dismissRecommendation = (productId: string) => {
+    setDismissedRecommendationIds((prev) => new Set(prev).add(productId));
   };
 
   const handleSubmit = async () => {
@@ -198,6 +292,81 @@ export default function QuotationsPage() {
   const statuses = Array.from(new Set(quotations.map((quotation) => quotation.status))).filter(Boolean);
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
 
+  // PRD B7: confirmed orders show one-time and recurring lines together with
+  // a billing schedule, so fetch the order snapshot once a quote is confirmed.
+  useEffect(() => {
+    if (!selectedId || selectedQuotation?.status !== 'CONFIRMED') {
+      setOrderSnapshot(null);
+      return;
+    }
+    setOrderSnapshotLoading(true);
+    api
+      .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
+      .then((d) => setOrderSnapshot(d.snapshot))
+      .catch(() => setOrderSnapshot(null))
+      .finally(() => setOrderSnapshotLoading(false));
+  }, [selectedId, selectedQuotation?.status]);
+
+  const cancelOrderSubscription = async (subscriptionId: string) => {
+    setError(null);
+    setInfo(null);
+    setSubscriptionActionId(subscriptionId);
+    try {
+      await api.post(`/subscriptions/${subscriptionId}/cancel`, { reason: 'Cancelled from order view' });
+      setInfo('Subscription cancelled. A prorated credit note is issued automatically if applicable.');
+      if (selectedId) {
+        api
+          .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
+          .then((d) => setOrderSnapshot(d.snapshot))
+          .catch(() => {});
+      }
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to cancel subscription');
+    } finally {
+      setSubscriptionActionId(null);
+    }
+  };
+
+  const openModify = (subscription: OrderSnapshotSubscription) => {
+    setModifyTarget(subscription);
+    setModifyQty(subscription.qty);
+    setModifyProrationPreview(null);
+  };
+
+  useEffect(() => {
+    if (!modifyTarget) return;
+    api
+      .get<{ proratedDeltaCents: number }>(`/billing/prorate?subscriptionId=${modifyTarget.id}&newQty=${modifyQty}`)
+      .then((d) => setModifyProrationPreview(d.proratedDeltaCents))
+      .catch(() => setModifyProrationPreview(null));
+  }, [modifyTarget, modifyQty]);
+
+  const confirmModifySubscription = async () => {
+    if (!modifyTarget) return;
+    setSubscriptionActionId(modifyTarget.id);
+    try {
+      await api.post(`/subscriptions/${modifyTarget.id}/modify`, { newQty: modifyQty });
+      setModifyTarget(null);
+      setInfo('Subscription modified. A prorated credit note is issued automatically if applicable.');
+      if (selectedId) {
+        api
+          .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
+          .then((d) => setOrderSnapshot(d.snapshot))
+          .catch(() => {});
+      }
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to modify subscription');
+    } finally {
+      setSubscriptionActionId(null);
+    }
+  };
+
+  const oneTimeOrderLines = orderSnapshot?.lines.filter((line) => line.type === 'ONE_TIME') || [];
+  const recurringOrderLines = orderSnapshot?.lines.filter((line) => line.type === 'RECURRING') || [];
+  const productNameByLineId = new Map(
+    lines.map((line) => [line._id, typeof line.productId === 'object' ? line.productId.name : 'Product'])
+  );
+
   // Calculate summary from lines
   const subtotal = lines.reduce((s, l) => s + (l.lineSubtotal || l.quantity * l.unitPrice), 0);
   const totalDiscount = lines.reduce((s, l) => s + (l.discountAmount || 0), 0);
@@ -223,6 +392,10 @@ export default function QuotationsPage() {
   const canEditLines = canEdit && selectedQuotation
     ? !['REJECTED', 'CONFIRMED', 'EXPIRED', 'CANCELLED'].includes(selectedQuotation.status)
     : false;
+
+  const visibleRecommendations = recommendations.filter(
+    (recommendation) => !dismissedRecommendationIds.has(recommendation.product.id)
+  );
 
   return (
     <div className="sales-page quotations-page">
@@ -313,7 +486,9 @@ export default function QuotationsPage() {
                     setSelectedId(quotation.id);
                     setLines([]);
                     setQuotationDetail(null);
+                    setDismissedRecommendationIds(new Set());
                     loadLines(quotation.id);
+                    loadRecommendations(quotation.id);
                     setInfo(null);
                   }}
                 >
@@ -424,6 +599,92 @@ export default function QuotationsPage() {
                 )}
               </div>
 
+              {/* Order & Billing (PRD B7): one-time and recurring lines shown
+                  together for a confirmed order, with billing schedule and
+                  cancel/modify controls for recurring lines. */}
+              {selectedQuotation?.status === 'CONFIRMED' && (
+                <div className="quotation-billing-section">
+                  <h3 className="quotation-section-title">Order &amp; billing</h3>
+
+                  {orderSnapshotLoading ? (
+                    <div className="skeleton" style={{ height: 80 }} />
+                  ) : !orderSnapshot ? (
+                    <div className="quotation-empty-lines">
+                      <p>Order and billing details were not returned for this order.</p>
+                    </div>
+                  ) : (
+                    <div className="quotation-billing-groups">
+                      <div className="quotation-billing-group">
+                        <h4>One-time</h4>
+                        {oneTimeOrderLines.length === 0 ? (
+                          <p className="sales-empty-line">No one-time lines on this order.</p>
+                        ) : (
+                          <ul className="quotation-billing-list">
+                            {oneTimeOrderLines.map((line) => (
+                              <li key={line.quotationLineId}>
+                                <span>{productNameByLineId.get(line.quotationLineId) || 'Product'}</span>
+                                <span>{line.quantity} x {money(line.unitPrice)}</span>
+                                <strong>{money(line.lineTotal)}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="quotation-billing-group">
+                        <h4>Recurring</h4>
+                        {recurringOrderLines.length === 0 ? (
+                          <p className="sales-empty-line">No recurring lines on this order.</p>
+                        ) : (
+                          <ul className="quotation-billing-list quotation-billing-list-recurring">
+                            {recurringOrderLines.map((line) => (
+                              <li key={line.quotationLineId}>
+                                <div className="quotation-billing-recurring-main">
+                                  <span>{productNameByLineId.get(line.quotationLineId) || 'Product'}</span>
+                                  <span>{line.quantity} x {money(line.unitPrice)}</span>
+                                  <strong>{money(line.lineTotal)}</strong>
+                                </div>
+                                {line.subscription && (
+                                  <div className="quotation-billing-schedule">
+                                    <span className={`status-badge ${line.subscription.status === 'ACTIVE' ? 'status-active' : 'status-draft'}`}>
+                                      {line.subscription.status}
+                                    </span>
+                                    <span>{line.subscription.plan?.name || 'Plan'} ({line.subscription.plan?.cycle || 'cycle'})</span>
+                                    {line.subscription.status === 'ACTIVE' && (
+                                      <span>Next bill {new Date(line.subscription.nextBillDate).toLocaleDateString()}</span>
+                                    )}
+                                    {line.subscription.status === 'ACTIVE' && (
+                                      <div className="quotation-billing-actions">
+                                        <button
+                                          type="button"
+                                          className="btn btn-ghost btn-sm"
+                                          disabled={subscriptionActionId === line.subscription.id}
+                                          onClick={() => openModify(line.subscription!)}
+                                        >
+                                          Modify
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-danger btn-sm"
+                                          disabled={subscriptionActionId === line.subscription.id}
+                                          onClick={() => cancelOrderSubscription(line.subscription!.id)}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Add Line Form */}
               {canEditLines && (
                 <div className="quotation-add-line-section">
@@ -471,6 +732,72 @@ export default function QuotationsPage() {
                       Add line
                     </button>
                   </form>
+                </div>
+              )}
+
+              {/* Upsell / Cross-sell Panel */}
+              {canEditLines && (
+                <div className="quotation-upsell-section">
+                  <h3 className="quotation-section-title">
+                    <Sparkles size={15} />
+                    Recommended for this quote
+                  </h3>
+
+                  {recommendationsLoading ? (
+                    <div className="quotation-upsell-list">
+                      {[0, 1].map((i) => (
+                        <div key={i} className="skeleton" style={{ height: 64, marginBottom: 8 }} />
+                      ))}
+                    </div>
+                  ) : visibleRecommendations.length === 0 ? (
+                    <div className="quotation-empty-lines">
+                      <p>No upsell or cross-sell suggestions for the products on this quote yet.</p>
+                    </div>
+                  ) : (
+                    <div className="quotation-upsell-list">
+                      {visibleRecommendations.map((recommendation) => (
+                        <div key={recommendation.product.id} className="quotation-upsell-item">
+                          <div className="quotation-upsell-main">
+                            <div className="quotation-upsell-name">
+                              <span className="product-name">{recommendation.product.name}</span>
+                              {recommendation.promotionBoost > 0 && (
+                                <span className="quotation-upsell-promo-tag">Promoted</span>
+                              )}
+                            </div>
+                            <div className={`quotation-upsell-margin ${recommendation.estimatedMarginDelta < 0 ? 'negative' : ''}`}>
+                              <TrendingUp size={13} />
+                              <span>
+                                {recommendation.estimatedMarginDelta >= 0 ? '+' : ''}
+                                {money(recommendation.estimatedMarginDelta, recommendationsCurrency)} margin
+                              </span>
+                              <span className="quotation-upsell-margin-percent">
+                                ({recommendation.estimatedMarginPercent.toFixed(1)}% margin)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="quotation-upsell-actions">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={acceptingRecommendationId === recommendation.product.id}
+                              onClick={() => acceptRecommendation(recommendation)}
+                            >
+                              <Plus size={13} />
+                              Add to Quote
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => dismissRecommendation(recommendation.product.id)}
+                            >
+                              <X size={13} />
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -569,6 +896,44 @@ export default function QuotationsPage() {
           </div>
         )}
       </section>
+
+      {modifyTarget && (
+        <div className="df-modal-overlay" onClick={() => setModifyTarget(null)}>
+          <div className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header ops-modal-header">
+              <div>
+                <h2 className="df-modal-title">Modify subscription</h2>
+                <p>{modifyTarget.plan?.name || 'Plan'}</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setModifyTarget(null)}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">New quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={modifyQty}
+                  onChange={(e) => setModifyQty(parseInt(e.target.value, 10) || 1)}
+                  className="df-input"
+                />
+              </div>
+              <div className="ops-proration-box">
+                <span>Prorated {(modifyProrationPreview ?? 0) >= 0 ? 'charge' : 'credit'}</span>
+                <strong>{modifyProrationPreview !== null ? money(Math.abs(modifyProrationPreview) / 100) : 'Not returned'}</strong>
+              </div>
+            </div>
+            <div className="df-modal-footer">
+              <button onClick={() => setModifyTarget(null)} className="btn btn-ghost">Close</button>
+              <button onClick={confirmModifySubscription} className="btn btn-primary" disabled={subscriptionActionId === modifyTarget.id}>
+                Confirm changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

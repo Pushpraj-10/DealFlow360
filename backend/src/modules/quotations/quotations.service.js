@@ -11,6 +11,7 @@ import {ProductVariant} from '../products/productVariant.model.js';
 import {Quotation} from './quotation.model.js';
 import {QuotationVersion} from './quotationVersion.model.js';
 import {transitionQuotationState} from './quotationState.service.js';
+import {listSubscriptionsByQuoteLineIds} from '../subscriptions/subscription.service.js';
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -306,6 +307,14 @@ const buildConfirmedQuotationOrderSnapshot = async (quotationId) => {
     .lean()
     .sort({createdAt: 1});
 
+    // PRD B7: recurring lines need their billing schedule shown alongside
+    // the order, so look up each line's originating subscription (if any).
+    const recurringLineIds = lines.filter((line) => line.lineType === 'RECURRING').map((line) => line._id);
+    const subscriptions = await listSubscriptionsByQuoteLineIds(recurringLineIds);
+    const subscriptionByLineId = new Map(
+        subscriptions.map((subscription) => [subscription.originating_quote_line_id.toString(), subscription])
+    );
+
     return {
         quotationId: quotation._id,
         quotationVersion: quotation.confirmedVersion || quotation.currentVersion,
@@ -320,32 +329,50 @@ const buildConfirmedQuotationOrderSnapshot = async (quotationId) => {
             tax: quotation.tax,
             grandTotal: quotation.grandTotal
         },
-        lines: lines.map((line) => ({
-            quotationLineId: line._id,
-            productId: line.productId?._id || line.productId,
-            variant: line.variantId ? {
-                id: line.variantId._id,
-                sku: line.variantId.sku,
-                name: line.variantId.name,
-                attributes: line.variantId.attributes || {}
-            } : null,
-            quantity: line.quantity,
-            unitPrice: line.unitPrice,
-            discount: {
-                percent: line.discountPercent,
-                amount: line.discountAmount
-            },
-            tax: {
-                percent: line.taxPercentage,
-                amount: line.tax
-            },
-            lineTotal: line.lineTotal,
-            revenueAfterDiscount: line.revenueAfterDiscount,
-            type: line.lineType,
-            recurringPlanReference: line.lineType === 'RECURRING'
-                ? line.productId?.recurringPlanReference || null
-                : null
-        }))
+        lines: lines.map((line) => {
+            const subscription = subscriptionByLineId.get(line._id.toString()) || null;
+
+            return {
+                quotationLineId: line._id,
+                productId: line.productId?._id || line.productId,
+                variant: line.variantId ? {
+                    id: line.variantId._id,
+                    sku: line.variantId.sku,
+                    name: line.variantId.name,
+                    attributes: line.variantId.attributes || {}
+                } : null,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                discount: {
+                    percent: line.discountPercent,
+                    amount: line.discountAmount
+                },
+                tax: {
+                    percent: line.taxPercentage,
+                    amount: line.tax
+                },
+                lineTotal: line.lineTotal,
+                revenueAfterDiscount: line.revenueAfterDiscount,
+                type: line.lineType,
+                recurringPlanReference: line.lineType === 'RECURRING'
+                    ? line.productId?.recurringPlanReference || null
+                    : null,
+                subscription: subscription ? {
+                    id: subscription._id,
+                    status: subscription.status,
+                    qty: subscription.qty,
+                    recurringUnitPriceCents: subscription.recurring_unit_price_cents,
+                    nextBillDate: subscription.next_bill_date,
+                    currentPeriodStart: subscription.current_period_start,
+                    currentPeriodEnd: subscription.current_period_end,
+                    plan: subscription.plan_id ? {
+                        id: subscription.plan_id._id,
+                        name: subscription.plan_id.name,
+                        cycle: subscription.plan_id.cycle
+                    } : null
+                } : null
+            };
+        })
     };
 };
 

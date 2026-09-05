@@ -6,7 +6,8 @@ import { Fulfillment } from '../fulfillment/fulfillment.model.js';
 import { Invoice } from '../invoicing/invoice.model.js';
 import { Subscription } from '../subscriptions/subscription.model.js';
 import { User } from '../users/user.model.js';
-import { USER_ROLES, QUOTATION_STATUSES } from '../../core/constants.js';
+import { Product } from '../products/product.model.js';
+import { USER_ROLES, USER_STATUSES, QUOTATION_STATUSES } from '../../core/constants.js';
 
 const findOpenQuotations = () => Quotation.find({ status: { $ne: QUOTATION_STATUSES.CANCELLED } });
 
@@ -17,6 +18,13 @@ const findQuotations = (filter = {}) => Quotation.find(filter).sort({ createdAt:
 const findManagers = () => User.find({ role: { $in: [USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE] } });
 
 const findUsersByTeam = (team) => User.find({ team });
+
+const findSalesReps = () =>
+    User.find({ role: USER_ROLES.SALES_REP, status: USER_STATUSES.ACTIVE }).select('fullName email team');
+
+const findDistinctTeams = () => User.distinct('team', { team: { $ne: null } });
+
+const findProductsByCategory = (categoryId) => Product.find({ categoryId }).select('_id');
 
 const findLinesByQuotationId = (quotationId) => QuotationLine.find({ quotationId });
 
@@ -62,6 +70,9 @@ export {
     findQuotations,
     findManagers,
     findUsersByTeam,
+    findSalesReps,
+    findDistinctTeams,
+    findProductsByCategory,
     findLinesByQuotationId,
     findHistoricalQuotationsByOwner,
     findFulfillmentByQuotationId,

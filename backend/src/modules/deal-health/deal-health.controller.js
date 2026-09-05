@@ -22,6 +22,11 @@ const getDashboard = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, dashboard));
 });
 
+const getSalesReportFilters = asyncHandler(async (req, res) => {
+    const filters = await dealHealthService.getSalesReportFilters();
+    return res.status(200).json(new ApiResponse(200, filters));
+});
+
 const getSalesReport = asyncHandler(async (req, res) => {
     const report = await dealHealthService.getSalesReport(req.query);
     return res.status(200).json(new ApiResponse(200, report));
@@ -34,4 +39,20 @@ const exportSalesReport = asyncHandler(async (req, res) => {
     return res.status(200).send(Buffer.from(buffer));
 });
 
-export { listAlerts, nudgeAlert, escalateAlert, getDashboard, getSalesReport, exportSalesReport };
+const exportSalesReportPdf = asyncHandler(async (req, res) => {
+    const buffer = await dealHealthService.buildSalesReportPdf(req.query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-report.pdf"');
+    return res.status(200).send(buffer);
+});
+
+export {
+    listAlerts,
+    nudgeAlert,
+    escalateAlert,
+    getDashboard,
+    getSalesReportFilters,
+    getSalesReport,
+    exportSalesReport,
+    exportSalesReportPdf,
+};

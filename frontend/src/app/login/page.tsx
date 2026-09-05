@@ -137,7 +137,7 @@ export default function LoginPage() {
               Sign in to your workspace
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Enter your credentials to access DealFlow360.
+              Enter your credentials to access DealFlow360. New internal accounts are created by an admin.
             </p>
           </div>
 

@@ -3,21 +3,52 @@
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
-import { TopNavigation } from './TopNavigation';
 import { UserMenu } from './UserMenu';
+import { findActiveLabel, getNavigation } from './navigation';
 import { useAuth } from '@/lib/useAuth';
-import { Menu, MessageSquare, Quote, UserRound, X } from 'lucide-react';
+import { Bell, Menu, MessageSquare, PanelLeft, Quote, UserRound, X } from 'lucide-react';
+
+// Rendered without the app shell and reachable while signed out.
+const PUBLIC_ROUTES = ['/login', '/landing'];
+const RAIL_STORAGE_KEY = 'dealflow360_sidebar_rail';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, loading } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [rail, setRail] = useState(false);
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
   useEffect(() => {
-    if (loading) return;
+    try {
+      setRail(window.localStorage.getItem(RAIL_STORAGE_KEY) === '1');
+    } catch {
+      // Storage can be unavailable in private windows; the default is fine.
+    }
+  }, []);
+
+  const toggleRail = () => {
+    setRail((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(RAIL_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // Ignore: collapsing still works for this session.
+      }
+      return next;
+    });
+  };
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (loading || isPublicRoute) return;
     if (!user) {
-      if (pathname !== '/login') router.replace('/login');
+      router.replace('/login');
       return;
     }
     if (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) {
@@ -27,14 +58,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')) {
       router.replace('/');
     }
-  }, [loading, user, pathname, router]);
+  }, [loading, user, pathname, router, isPublicRoute]);
 
-  // Login page — bare layout
-  if (pathname === '/login') {
+  // Login and landing pages render bare, with no internal shell.
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 
-  // Portal pages — clean customer-facing layout without internal shell
+  // Portal pages keep their own customer-facing layout.
   if (pathname.startsWith('/portal')) {
     return (
       <div className="portal-shell">
@@ -48,7 +79,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Quote size={14} />
               My Quote
             </a>
-            <a className={pathname.includes('/quotation') ? 'active' : ''} href={pathname.startsWith('/portal/quotation') ? `${pathname}#messages` : '/portal'}>
+            <a
+              className={pathname.includes('/quotation') ? 'active' : ''}
+              href={pathname.startsWith('/portal/quotation') ? `${pathname}#messages` : '/portal'}
+            >
               <MessageSquare size={14} />
               Messages
             </a>
@@ -64,102 +98,71 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Loading / unauthenticated guard
   if (loading || !user) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: 'var(--accent)',
-              borderRadius: 7,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>D</span>
-          </div>
-          <div
-            style={{
-              width: 120,
-              height: 3,
-              background: 'var(--surface-03)',
-              borderRadius: 99,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                height: '100%',
-                background: 'var(--accent)',
-                borderRadius: 99,
-                animation: 'shimmer 1.4s ease infinite',
-                backgroundSize: '200% 100%',
-                backgroundImage:
-                  'linear-gradient(90deg, var(--accent) 25%, #60a5fa 50%, var(--accent) 75%)',
-              }}
-            />
-          </div>
+      <div className="app-boot">
+        <div className="app-boot__mark">
+          <span>D</span>
+        </div>
+        <div className="app-boot__bar">
+          <div />
         </div>
       </div>
     );
   }
 
-  if (user.role === 'ADMIN') {
-    return (
-      <div className="admin-app-shell">
-        <div className="admin-sidebar-desktop">
-          <Sidebar />
-        </div>
+  const activeLabel = findActiveLabel(getNavigation(user.role), pathname);
 
-        {sidebarOpen && (
-          <div className="mobile-shell-overlay" onClick={() => setSidebarOpen(false)}>
-            <div onClick={(e) => e.stopPropagation()}>
-              <Sidebar />
-            </div>
-          </div>
-        )}
-
-        <div className="admin-main-shell">
-          <header className="df-topbar">
-            <button className="icon-button mobile-menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
-              <Menu size={17} />
-            </button>
-            <div className="topbar-spacer" />
-            <UserMenu user={user} onLogout={logout} />
-          </header>
-          <main className="app-main-content">{children}</main>
-        </div>
-      </div>
-    );
-  }
-
-  // Main app layout for Sales, Manager, Finance, and Operations roles
   return (
-    <div className="app-shell">
-      <button className="mobile-menu-fab" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}>
-        {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-      </button>
-      <TopNavigation user={user} onLogout={logout} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
-      <main className="app-main-content">{children}</main>
+    <div className={`app-shell${rail ? ' app-shell--rail' : ''}`}>
+      <div className="app-shell__sidebar">
+        <Sidebar role={user.role} rail={rail} />
+      </div>
+
+      {drawerOpen && (
+        <div className="app-drawer" role="dialog" aria-modal="true" aria-label="Navigation">
+          <div className="app-drawer__scrim" onClick={() => setDrawerOpen(false)} />
+          <div className="app-drawer__panel">
+            <button
+              className="icon-button app-drawer__close"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X size={16} />
+            </button>
+            <Sidebar role={user.role} onNavigate={() => setDrawerOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      <div className="app-shell__main">
+        <header className="app-topbar">
+          <button
+            className="icon-button app-topbar__drawer-trigger"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={17} />
+          </button>
+          <button
+            className="icon-button app-topbar__rail-trigger"
+            onClick={toggleRail}
+            aria-pressed={rail}
+            title={rail ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={rail ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            <PanelLeft size={16} />
+          </button>
+          {activeLabel && <span className="app-topbar__context">{activeLabel}</span>}
+          <div className="app-topbar__actions">
+            <button className="icon-button" title="Notifications" aria-label="Notifications">
+              <Bell size={16} />
+            </button>
+            <UserMenu user={user} onLogout={logout} />
+          </div>
+        </header>
+        <main className="app-main">{children}</main>
+      </div>
     </div>
   );
 }
