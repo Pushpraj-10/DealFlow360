@@ -1,0 +1,35 @@
+import approvalsRoutes from './approvals/approvals.routes.js';
+import authRoutes from './auth/auth.routes.js';
+import auditLogsRoutes from './auditLogs/auditLogs.routes.js';
+import categoriesRoutes from './categories/categories.routes.js';
+import customersRoutes from './customers/customers.routes.js';
+import customerTiersRoutes from './customerTiers/customerTiers.routes.js';
+import discountRulesRoutes from './discountRules/discountRules.routes.js';
+import negotiationsRoutes from './negotiations/negotiations.routes.js';
+import priceListsRoutes from './priceLists/priceLists.routes.js';
+import productsRoutes from './products/products.routes.js';
+import quotationLinesRoutes from './quotationLines/quotationLines.routes.js';
+import quotationsRoutes from './quotations/quotations.routes.js';
+import recommendationsRoutes from './recommendations/recommendations.routes.js';
+import riskEngineRoutes from './riskEngine/riskEngine.routes.js';
+import usersRoutes from './users/users.routes.js';
+
+const registerModuleRoutes = (app) => {
+    app.use('/api/v1/auth', authRoutes);
+    app.use('/api/v1/users', usersRoutes);
+    app.use('/api/v1/customers', customersRoutes);
+    app.use('/api/v1/customer-tiers', customerTiersRoutes);
+    app.use('/api/v1/products', productsRoutes);
+    app.use('/api/v1/categories', categoriesRoutes);
+    app.use('/api/v1/price-lists', priceListsRoutes);
+    app.use('/api/v1/quotations', quotationsRoutes);
+    app.use('/api/v1/quotation-lines', quotationLinesRoutes);
+    app.use('/api/v1/discount-rules', discountRulesRoutes);
+    app.use('/api/v1/risk-engine', riskEngineRoutes);
+    app.use('/api/v1/approvals', approvalsRoutes);
+    app.use('/api/v1/audit-logs', auditLogsRoutes);
+    app.use('/api/v1/negotiations', negotiationsRoutes);
+    app.use('/api/v1/recommendations', recommendationsRoutes);
+};
+
+export {registerModuleRoutes};

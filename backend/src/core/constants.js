@@ -1,1 +1,65 @@
-export const DB_NAME = 'videoTube';
+export const DB_NAME = 'dealFlow360';
+
+export const USER_ROLES = Object.freeze({
+    SALES_REP: 'SALES_REP',
+    SALES_MANAGER: 'SALES_MANAGER',
+    FINANCE: 'FINANCE',
+    ADMIN: 'ADMIN',
+    CUSTOMER: 'CUSTOMER'
+});
+
+export const INTERNAL_ROLES = Object.freeze([
+    USER_ROLES.SALES_REP,
+    USER_ROLES.SALES_MANAGER,
+    USER_ROLES.FINANCE,
+    USER_ROLES.ADMIN
+]);
+
+export const USER_STATUSES = Object.freeze({
+    ACTIVE: 'ACTIVE',
+    DISABLED: 'DISABLED'
+});
+
+export const CUSTOMER_STATUSES = Object.freeze({
+    ACTIVE: 'ACTIVE',
+    INACTIVE: 'INACTIVE',
+    ARCHIVED: 'ARCHIVED'
+});
+
+export const PRODUCT_STATUSES = Object.freeze({
+    ACTIVE: 'ACTIVE',
+    ARCHIVED: 'ARCHIVED'
+});
+
+export const PRODUCT_BILLING_TYPES = Object.freeze({
+    ONE_TIME: 'ONE_TIME',
+    RECURRING: 'RECURRING'
+});
+
+export const QUOTATION_STATUSES = Object.freeze({
+    DRAFT: 'DRAFT',
+    PENDING_APPROVAL: 'PENDING_APPROVAL',
+    APPROVED: 'APPROVED',
+    READY_FOR_CUSTOMER: 'READY_FOR_CUSTOMER',
+    NEGOTIATION: 'NEGOTIATION',
+    CONFIRMED: 'CONFIRMED',
+    REJECTED: 'REJECTED',
+    CANCELLED: 'CANCELLED'
+});
+
+export const APPROVAL_STATUSES = Object.freeze({
+    NOT_REQUIRED: 'NOT_REQUIRED',
+    PENDING: 'PENDING',
+    APPROVED: 'APPROVED',
+    RETURNED: 'RETURNED',
+    REJECTED: 'REJECTED'
+});
+
+export const APPROVAL_STEP_STATUSES = Object.freeze({
+    PENDING: 'PENDING',
+    ACTIVE: 'ACTIVE',
+    APPROVED: 'APPROVED',
+    RETURNED: 'RETURNED',
+    REJECTED: 'REJECTED',
+    SKIPPED: 'SKIPPED'
+});
