@@ -112,10 +112,12 @@ const run = async () => {
     await wipe();
 
     const passwordHash = hashPassword(SEED_PASSWORD);
-    const [rep, ops, admin] = await User.create([
+    const [rep, ops, admin, manager, customer] = await User.create([
         { fullName: 'Sam Rep', email: 'rep@dealflow360.dev', passwordHash, role: USER_ROLES.SALES_REP, team: 'east' },
         { fullName: 'Olivia Ops', email: 'ops@dealflow360.dev', passwordHash, role: USER_ROLES.FINANCE, team: 'east' },
         { fullName: 'Alex Admin', email: 'admin@dealflow360.dev', passwordHash, role: USER_ROLES.ADMIN, team: 'east' },
+        { fullName: 'Sarah Manager', email: 'manager@dealflow360.dev', passwordHash, role: USER_ROLES.SALES_MANAGER, team: 'east' },
+        { fullName: 'Chris Customer', email: 'customer@dealflow360.dev', passwordHash, role: USER_ROLES.CUSTOMER, team: 'external' },
     ]);
 
     const [goldTier, silverTier] = await CustomerTier.create([
