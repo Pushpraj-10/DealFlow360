@@ -1,11 +1,14 @@
 {
-  "name": "videotube",
+  "name": "dealflow360-backend",
   "version": "1.0.0",
-  "description": "more like youTube",
+  "description": "DealFlow360 backend API - B2B sales-ops quotation-to-cash platform",
   "keywords": [
-    "node.js",
+    "dealflow360",
+    "b2b",
+    "sales-ops",
+    "express",
     "mongoose",
-    "express"
+    "hackathon"
   ],
   "license": "ISC",
   "author": "dhanesh",
@@ -14,7 +17,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "seed": "node src/seed/seed.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",
