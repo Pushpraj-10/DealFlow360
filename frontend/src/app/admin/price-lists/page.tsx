@@ -24,7 +24,9 @@ export default function PriceListsPage() {
 
   const load = () => {
     api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
-    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    if (canManage) {
+      api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    }
     api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   };
 

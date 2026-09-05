@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
+import { TopNavigation } from './TopNavigation';
+import { UserMenu } from './UserMenu';
 import { useAuth } from '@/lib/useAuth';
-import { LogOut, User, Menu, X } from 'lucide-react';
+import { Menu, MessageSquare, Quote, UserRound, X } from 'lucide-react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -32,65 +34,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Portal pages — clean customer-facing layout without sidebar
+  // Portal pages — clean customer-facing layout without internal shell
   if (pathname.startsWith('/portal')) {
     return (
-      <div style={{ minHeight: '100vh', background: '#F8F7F5' }}>
-        {/* Portal header */}
-        <header
-          style={{
-            background: '#fff',
-            borderBottom: '1px solid var(--border)',
-            padding: '0 32px',
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                background: 'var(--accent)',
-                borderRadius: 5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>D</span>
-            </div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>DealFlow360</span>
-            <span
-              style={{
-                fontSize: 11,
-                color: 'var(--text-tertiary)',
-                background: 'var(--surface-02)',
-                padding: '2px 7px',
-                borderRadius: 99,
-                marginLeft: 4,
-              }}
-            >
-              Customer Portal
-            </span>
-          </div>
-          {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{user.fullName}</span>
-              <button
-                onClick={logout}
-                className="btn btn-ghost btn-sm"
-                title="Sign out"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
-          )}
+      <div className="portal-shell">
+        <header className="portal-header">
+          <a href="/portal" className="portal-brand">
+            <span className="df-brand-mark">D</span>
+            <span>DealFlow360</span>
+          </a>
+          <nav className="portal-nav" aria-label="Customer portal navigation">
+            <a className={pathname === '/portal' ? 'active' : ''} href="/portal">
+              <Quote size={14} />
+              My Quote
+            </a>
+            <a className={pathname.includes('/quotation') ? 'active' : ''} href={pathname.startsWith('/portal/quotation') ? pathname : '/portal'}>
+              <MessageSquare size={14} />
+              Messages
+            </a>
+            <a href="/portal">
+              <UserRound size={14} />
+              Profile
+            </a>
+          </nav>
+          {user && <UserMenu user={user} onLogout={logout} />}
         </header>
-        <main style={{ maxWidth: 760, margin: '0 auto', padding: '32px 24px' }}>{children}</main>
+        <main className="portal-main">{children}</main>
       </div>
     );
   }
@@ -154,97 +123,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Main app layout
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Desktop sidebar */}
-      <div className="hidden-mobile" style={{ display: 'flex' }}>
-        <Sidebar />
-      </div>
-
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 40,
-            background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(2px)',
-          }}
-          onClick={() => setSidebarOpen(false)}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 224, height: '100%' }}>
-            <Sidebar />
-          </div>
+  if (user.role === 'ADMIN') {
+    return (
+      <div className="admin-app-shell">
+        <div className="admin-sidebar-desktop">
+          <Sidebar />
         </div>
-      )}
 
-      {/* Main content area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {/* Top bar */}
-        <header className="df-topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Mobile hamburger */}
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ display: 'none' }}
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open navigation"
-            >
-              <Menu size={16} />
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '5px 10px',
-                borderRadius: 'var(--radius)',
-                background: 'var(--surface-02)',
-              }}
-            >
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <User size={11} color="#fff" />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                  {user.fullName}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.2 }}>
-                  {user.role}
-                </div>
-              </div>
+        {sidebarOpen && (
+          <div className="mobile-shell-overlay" onClick={() => setSidebarOpen(false)}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Sidebar />
             </div>
-
-            <button
-              onClick={logout}
-              className="btn btn-ghost btn-sm"
-              title="Sign out"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <LogOut size={14} />
-            </button>
           </div>
-        </header>
+        )}
 
-        {/* Page content */}
-        <main style={{ flex: 1, overflowY: 'auto' }}>{children}</main>
+        <div className="admin-main-shell">
+          <header className="df-topbar">
+            <button className="icon-button mobile-menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+              <Menu size={17} />
+            </button>
+            <div className="topbar-spacer" />
+            <UserMenu user={user} onLogout={logout} />
+          </header>
+          <main className="app-main-content">{children}</main>
+        </div>
       </div>
+    );
+  }
+
+  // Main app layout for Sales, Manager, Finance, and Operations roles
+  return (
+    <div className="app-shell">
+      <button className="mobile-menu-fab" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}>
+        {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+      </button>
+      <TopNavigation user={user} onLogout={logout} mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
+      <main className="app-main-content">{children}</main>
     </div>
   );
 }
