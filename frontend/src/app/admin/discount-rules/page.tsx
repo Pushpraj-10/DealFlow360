@@ -42,8 +42,8 @@ export default function DiscountRulesPage() {
   const resultObj = result as Record<string, unknown> | null;
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page discount-rules-page">
+      <div className="admin-page-header discount-rules-page__header">
         <div>
           <p className="admin-eyebrow">Governance</p>
           <h1>Discount Rules</h1>
@@ -60,7 +60,7 @@ export default function DiscountRulesPage() {
         </div>
       )}
 
-      <div className="admin-rules-layout">
+      <div className="admin-rules-layout discount-rules-page__layout">
         <div className="admin-panel">
           <div className="admin-panel-header">
             <span style={{ fontSize: 13, fontWeight: 600 }}>Lookup Allowed Discount</span>
@@ -116,7 +116,9 @@ export default function DiscountRulesPage() {
             </div>
             <div className="df-card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Object.entries(resultObj).map(([key, value]) => (
+                {Object.entries(resultObj)
+                  .filter(([, value]) => typeof value !== 'object' || value === null)
+                  .map(([key, value]) => (
                   <div
                     key={key}
                     style={{

@@ -47,6 +47,11 @@ const listSubscriptions = ({ customer_id, status } = {}) => {
     return subscriptionRepository.findSubscriptions(filter);
 };
 
+const listSubscriptionsByQuoteLineIds = (quoteLineIds) => {
+    if (!quoteLineIds?.length) return [];
+    return subscriptionRepository.findSubscriptionsByQuoteLineIds(quoteLineIds);
+};
+
 const getSubscriptionOrThrow = async (id) => {
     const subscription = await subscriptionRepository.findSubscriptionById(id);
     if (!subscription) {
@@ -305,6 +310,7 @@ export {
     listPlans,
     createPlan,
     listSubscriptions,
+    listSubscriptionsByQuoteLineIds,
     getSubscriptionOrThrow,
     createSubscription,
     dryRunProration,

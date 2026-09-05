@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, FileCheck } from 'lucide-react';
 
 type Rule = {
@@ -24,7 +25,10 @@ function getSeverityClass(s: string) {
 }
 
 export default function ApprovalRulesPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [rules, setRules] = useState<Rule[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -38,7 +42,8 @@ export default function ApprovalRulesPage() {
   const load = () => {
     api.get<{ rules: Rule[] }>('/approvals/rules')
       .then((d) => setRules(d.rules))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load approval rules'));
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load approval rules'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -68,17 +73,19 @@ export default function ApprovalRulesPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page approval-rules-page">
+      <div className="admin-page-header approval-rules-page__header">
         <div>
           <p className="admin-eyebrow">Governance</p>
           <h1>Approval Rules</h1>
           <p>Define which risk bands require approval and who approves them.</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Rule
-        </button>
+        {canManage && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Rule
+          </button>
+        )}
       </div>
 
       {error && (
@@ -88,8 +95,14 @@ export default function ApprovalRulesPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {rules.length === 0 ? (
+      <div className="admin-panel approval-rules-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : rules.length === 0 ? (
           <div className="df-empty">
             <FileCheck size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No approval rules</div>

@@ -114,6 +114,23 @@ export function LoadingSkeleton({ className = '', style }: { className?: string;
   return <div className={`skeleton ${className}`.trim()} style={style} />;
 }
 
+/** Skeleton table rows shown while a list is loading, so the empty state
+ * never flashes before the first fetch resolves. `columns` should match the
+ * table's real column count so the shimmer bar sits under real header cells. */
+export function TableSkeletonRows({ columns, rows = 3 }: { columns: number; rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, i) => (
+        <tr key={i}>
+          <td colSpan={columns}>
+            <div className="skeleton" style={{ height: 16, width: `${72 - i * 10}%` }} />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export function ErrorState({ message }: { message: string }) {
   return <div className="df-alert df-alert-error">{message}</div>;
 }

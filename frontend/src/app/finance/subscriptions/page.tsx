@@ -16,6 +16,7 @@ import {
 
 export default function SubscriptionsPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Subscription | null>(null);
   const [modifyTarget, setModifyTarget] = useState<Subscription | null>(null);
@@ -25,7 +26,7 @@ export default function SubscriptionsPage() {
   const load = () => {
     api.get<Subscription[]>('/subscriptions').then(setSubs).catch((err) =>
       setError(err instanceof ApiClientError ? err.message : 'Failed to load subscriptions')
-    );
+    ).finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -78,8 +79,8 @@ export default function SubscriptionsPage() {
   );
 
   return (
-    <div className="ops-page">
-      <div className="ops-page-heading">
+    <div className="ops-page subscriptions-page">
+      <div className="ops-page-heading subscriptions-page__header">
         <div>
           <p className="ops-eyebrow">Finance</p>
           <h1>Subscriptions</h1>
@@ -121,7 +122,13 @@ export default function SubscriptionsPage() {
             </div>
           </div>
 
-          {subs.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '60%' }} />
+            </div>
+          ) : subs.length === 0 ? (
             <div className="df-empty">
               <RefreshCw size={28} />
               <div className="df-empty-title">No subscriptions</div>

@@ -15,6 +15,7 @@ type Plan = {
 
 export default function SubscriptionPlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
@@ -24,7 +25,7 @@ export default function SubscriptionPlansPage() {
   const load = () => {
     api.get<Plan[]>('/subscription-plans').then(setPlans).catch((err) =>
       setError(err instanceof ApiClientError ? err.message : 'Failed to load plans')
-    );
+    ).finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -42,8 +43,8 @@ export default function SubscriptionPlansPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page subscription-plans-page">
+      <div className="admin-page-header subscription-plans-page__header">
         <div>
           <p className="admin-eyebrow">Operations</p>
           <h1>Subscription Plans</h1>
@@ -62,8 +63,14 @@ export default function SubscriptionPlansPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {plans.length === 0 ? (
+      <div className="admin-panel subscription-plans-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : plans.length === 0 ? (
           <div className="df-empty">
             <RefreshCw size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No subscription plans</div>

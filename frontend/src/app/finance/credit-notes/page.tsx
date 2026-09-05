@@ -12,6 +12,7 @@ function money(cents: number) {
 
 export default function CreditNotesPage() {
   const [notes, setNotes] = useState<CreditNote[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [customerId, setCustomerId] = useState('');
@@ -21,7 +22,7 @@ export default function CreditNotesPage() {
   const load = () => {
     api.get<CreditNote[]>('/credit-notes').then(setNotes).catch((err) =>
       setError(err instanceof ApiClientError ? err.message : 'Failed to load credit notes')
-    );
+    ).finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -47,8 +48,8 @@ export default function CreditNotesPage() {
   const totalIssued = notes.reduce((s, n) => s + n.amount_cents, 0);
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="df-page credit-notes-page">
+      <div className="df-page-header credit-notes-page__header">
         <div>
           <h1 className="df-page-title">Credit Notes</h1>
           <p className="df-page-subtitle">{notes.length} credit note{notes.length !== 1 ? 's' : ''} issued</p>
@@ -73,8 +74,14 @@ export default function CreditNotesPage() {
         </div>
       )}
 
-      <div className="df-card">
-        {notes.length === 0 ? (
+      <div className="df-card credit-notes-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : notes.length === 0 ? (
           <div className="df-empty">
             <CreditCard size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No credit notes</div>

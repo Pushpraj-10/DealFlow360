@@ -1,9 +1,10 @@
 import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
 import { ApiError } from '../../core/utils/apiError.js';
 import { ErrorCodes } from '../../core/utils/errorCodes.js';
 import { logAction } from '../_shared/audit-log/audit-log.service.js';
 import * as dealHealthRepository from './deal-health.repository.js';
-import { QUOTATION_STATUSES } from '../../core/constants.js';
+import { QUOTATION_STATUSES, APPROVAL_STATUSES } from '../../core/constants.js';
 
 // PRD section 8.10 - configurable v1 thresholds.
 const STALLED_DAYS = 7;
@@ -244,18 +245,27 @@ const resolvePeriodRange = (period, from, to) => {
     return { from: new Date(0), to: now };
 };
 
-const buildSalesReportRows = async ({ period, team, status, product, from, to }) => {
+const buildSalesReportRows = async ({ period, team, repId, status, approvalStatus, product, category, from, to }) => {
     const { from: fromDate, to: toDate } = resolvePeriodRange(period, from, to);
 
     const filter = { createdAt: { $gte: fromDate, $lte: toDate } };
     if (status) filter.status = status;
+    if (approvalStatus) filter.approvalStatus = approvalStatus;
 
-    if (team) {
+    if (repId) {
+        filter.salesRepId = repId;
+    } else if (team) {
         const teamUsers = await dealHealthRepository.findUsersByTeam(team);
         filter.salesRepId = { $in: teamUsers.map((u) => u._id) };
     }
 
     const quotations = await dealHealthRepository.findQuotations(filter);
+
+    let categoryProductIds = null;
+    if (category) {
+        const categoryProducts = await dealHealthRepository.findProductsByCategory(category);
+        categoryProductIds = new Set(categoryProducts.map((p) => p._id.toString()));
+    }
 
     const rows = [];
     for (const quotation of quotations) {
@@ -263,7 +273,10 @@ const buildSalesReportRows = async ({ period, team, status, product, from, to })
         if (product) {
             lines = lines.filter((l) => l.productId?.toString() === product);
         }
-        if (product && lines.length === 0) continue;
+        if (categoryProductIds) {
+            lines = lines.filter((l) => categoryProductIds.has(l.productId?.toString()));
+        }
+        if ((product || category) && lines.length === 0) continue;
 
         // Convert dhan's plain-dollar unitPrice to cents at this read boundary.
         const grossCents = lines.reduce((sum, l) => sum + l.quantity * Math.round(l.unitPrice * 100), 0);
@@ -290,6 +303,19 @@ const buildSalesReportRows = async ({ period, team, status, product, from, to })
     return rows;
 };
 
+const getSalesReportFilters = async () => {
+    const [reps, teams] = await Promise.all([
+        dealHealthRepository.findSalesReps(),
+        dealHealthRepository.findDistinctTeams(),
+    ]);
+
+    return {
+        reps: reps.map((rep) => ({ id: rep._id, fullName: rep.fullName, email: rep.email, team: rep.team })),
+        teams,
+        approvalStatuses: Object.values(APPROVAL_STATUSES),
+    };
+};
+
 const getSalesReport = async (filters) => {
     const rows = await buildSalesReportRows(filters);
     return {
@@ -305,14 +331,8 @@ const getSalesReport = async (filters) => {
     };
 };
 
-/**
- * PLAN.md/PRD section 7.A7 asks for PDF/XLS export. XLSX is the real
- * deliverable here (a genuine .xlsx workbook opened via ExcelJS, not a
- * relabeled CSV) - PDF generation for tabular reports adds a second
- * rendering pipeline for the same data with no functional benefit for a
- * spreadsheet-shaped sales report, so it's left as a follow-up if a
- * print-formatted PDF is specifically needed later.
- */
+// PRD section A7 asks for PDF/XLS export. buildSalesReportWorkbook below
+// covers XLSX; buildSalesReportPdf covers the print-formatted PDF.
 const buildSalesReportWorkbook = async (filters) => {
     const rows = await buildSalesReportRows(filters);
 
@@ -353,12 +373,105 @@ const buildSalesReportWorkbook = async (filters) => {
     return workbook.xlsx.writeBuffer();
 };
 
+const PDF_REPORT_COLUMNS = [
+    { key: 'quote_no', label: 'Quote No', width: 160, align: 'left' },
+    { key: 'status', label: 'Status', width: 130, align: 'left' },
+    { key: 'created_at', label: 'Created At', width: 120, align: 'left' },
+    { key: 'line_count', label: 'Lines', width: 50, align: 'right' },
+    { key: 'gross', label: 'Gross', width: 90, align: 'right' },
+    { key: 'net', label: 'Net', width: 90, align: 'right' },
+    { key: 'effective_discount_pct', label: 'Discount %', width: 90, align: 'right' },
+];
+
+const buildSalesReportPdf = async (filters) => {
+    const rows = await buildSalesReportRows(filters);
+
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 40 });
+        const chunks = [];
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const tableLeft = doc.page.margins.left;
+        const rowHeight = 20;
+        const tableWidth = PDF_REPORT_COLUMNS.reduce((sum, col) => sum + col.width, 0);
+
+        const drawHeaderRow = (y) => {
+            doc.font('Helvetica-Bold').fontSize(9).fillColor('#000');
+            let x = tableLeft;
+            for (const col of PDF_REPORT_COLUMNS) {
+                doc.text(col.label, x, y, { width: col.width, align: col.align });
+                x += col.width;
+            }
+            doc.moveTo(tableLeft, y + 14).lineTo(tableLeft + tableWidth, y + 14).strokeColor('#ccc').stroke();
+        };
+
+        doc.font('Helvetica-Bold').fontSize(16).fillColor('#000').text('DealFlow360 Sales Report', tableLeft, 40);
+        doc.font('Helvetica').fontSize(9).fillColor('#555').text(`Generated ${new Date().toLocaleString()}`, tableLeft, 62);
+
+        const totalNetCents = rows.reduce((sum, r) => sum + r.net_cents, 0);
+        const avgDiscountPct = rows.length
+            ? (rows.reduce((sum, r) => sum + r.effective_discount_pct, 0) / rows.length).toFixed(2)
+            : '0.00';
+        doc
+            .fontSize(9)
+            .fillColor('#333')
+            .text(
+                `${rows.length} quotation${rows.length === 1 ? '' : 's'} - Total net $${(totalNetCents / 100).toFixed(2)} - Avg discount ${avgDiscountPct}%`,
+                tableLeft,
+                78
+            );
+
+        const bottomLimit = doc.page.height - doc.page.margins.bottom;
+        let y = 110;
+        drawHeaderRow(y);
+        y += rowHeight;
+
+        for (const row of rows) {
+            if (y + rowHeight > bottomLimit) {
+                doc.addPage();
+                y = doc.page.margins.top;
+                drawHeaderRow(y);
+                y += rowHeight;
+            }
+
+            const values = {
+                quote_no: row.quote_no,
+                status: row.status.replace(/_/g, ' '),
+                created_at: new Date(row.created_at).toLocaleDateString(),
+                line_count: String(row.line_count),
+                gross: `$${(row.gross_cents / 100).toFixed(2)}`,
+                net: `$${(row.net_cents / 100).toFixed(2)}`,
+                effective_discount_pct: `${row.effective_discount_pct}%`,
+            };
+
+            doc.font('Helvetica').fontSize(8.5).fillColor('#111');
+            let x = tableLeft;
+            for (const col of PDF_REPORT_COLUMNS) {
+                doc.text(values[col.key], x, y, {
+                    width: col.width,
+                    height: rowHeight - 6,
+                    align: col.align,
+                    ellipsis: true,
+                });
+                x += col.width;
+            }
+            y += rowHeight;
+        }
+
+        doc.end();
+    });
+};
+
 export {
     scanAndListAlerts,
     getAlertOrThrow,
     nudgeAlert,
     escalateAlert,
     getDashboard,
+    getSalesReportFilters,
     getSalesReport,
     buildSalesReportWorkbook,
+    buildSalesReportPdf,
 };

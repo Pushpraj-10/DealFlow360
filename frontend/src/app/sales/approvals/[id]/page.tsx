@@ -124,8 +124,8 @@ export default function ApprovalDetailPage() {
   const activeStep = approval?.steps?.find((step) => step.status === 'ACTIVE');
 
   return (
-    <div className="manager-page">
-      <Link href="/sales/approvals" className="manager-back-link">
+    <div className="manager-page approval-detail-page">
+      <Link href="/sales/approvals" className="manager-back-link approval-detail-page__back">
         <ArrowLeft size={14} />
         Approval queue
       </Link>
@@ -150,7 +150,7 @@ export default function ApprovalDetailPage() {
         </div>
       ) : (
         <>
-          <section className="manager-approval-hero">
+          <section className="manager-approval-hero approval-detail-page__hero">
             <div>
               <p className="sales-eyebrow">Approval Detail</p>
               <h1>{approvalQuoteNumber(approval)} · {customer ? getCustomerName(customer) : 'Customer'}</h1>

@@ -13,6 +13,7 @@ type Warehouse = {
 
 export default function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
@@ -24,7 +25,8 @@ export default function WarehousesPage() {
       .then(setWarehouses)
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load warehouses')
-      );
+      )
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -43,8 +45,8 @@ export default function WarehousesPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page warehouses-page">
+      <div className="admin-page-header warehouses-page__header">
         <div>
           <p className="admin-eyebrow">Operations</p>
           <h1>Warehouses</h1>
@@ -63,8 +65,14 @@ export default function WarehousesPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {warehouses.length === 0 ? (
+      <div className="admin-panel warehouses-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : warehouses.length === 0 ? (
           <div className="df-empty">
             <Warehouse size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No warehouses yet</div>

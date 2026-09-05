@@ -8,6 +8,7 @@ type Tier = { _id: string; name: string; defaultMaxDiscountPercent: number; isAc
 
 export default function CustomerTiersPage() {
   const [tiers, setTiers] = useState<Tier[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
@@ -17,7 +18,8 @@ export default function CustomerTiersPage() {
     api
       .get<{ tiers: Tier[] }>('/customer-tiers')
       .then((d) => setTiers(d.tiers))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load tiers'));
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load tiers'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -35,8 +37,8 @@ export default function CustomerTiersPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page customer-tiers-page">
+      <div className="admin-page-header customer-tiers-page__header">
         <div>
           <p className="admin-eyebrow">Sales</p>
           <h1>Customer Tiers</h1>
@@ -55,8 +57,14 @@ export default function CustomerTiersPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {tiers.length === 0 ? (
+      <div className="admin-panel customer-tiers-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : tiers.length === 0 ? (
           <div className="df-empty">
             <Tag size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No customer tiers</div>

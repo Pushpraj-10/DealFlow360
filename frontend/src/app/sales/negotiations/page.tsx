@@ -120,8 +120,8 @@ export default function NegotiationsPage() {
   const quotedValue = quotations.reduce((sum, quotation) => sum + Number(quotation.total || 0), 0);
 
   return (
-    <div className="sales-page">
-      <div className="sales-page-heading">
+    <div className="sales-page negotiations-page">
+      <div className="sales-page-heading negotiations-page__header">
         <div>
           <p className="sales-eyebrow">Negotiations</p>
           <h1>Commercial negotiation workspace</h1>

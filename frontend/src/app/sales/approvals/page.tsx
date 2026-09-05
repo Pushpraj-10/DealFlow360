@@ -25,9 +25,11 @@ import {
   type ApprovalRequest,
 } from '@/lib/manager';
 import { formatStatus } from '@/lib/salesRep';
+import { TableSkeletonRows } from '@/components/ui/primitives';
 
 export default function ApprovalsPage() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [reasonById, setReasonById] = useState<Record<string, string>>({});
@@ -41,7 +43,8 @@ export default function ApprovalsPage() {
       .then((d) => setRequests(d.approvalRequests))
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load pending approvals')
-      );
+      )
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -82,8 +85,8 @@ export default function ApprovalsPage() {
   const riskOptions = Array.from(new Set(requests.map((request) => request.riskLevel))).filter(Boolean);
 
   return (
-    <div className="manager-page">
-      <div className="manager-page-heading">
+    <div className="manager-page approval-queue-page">
+      <div className="manager-page-heading approval-queue-page__header">
         <div>
           <p className="sales-eyebrow">Approvals</p>
           <h1>Approval Queue</h1>
@@ -133,7 +136,8 @@ export default function ApprovalsPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleRequests.map((req) => {
+              {loading && <TableSkeletonRows columns={8} />}
+              {!loading && visibleRequests.map((req) => {
                 const isActing = actingOn === req._id;
 
                 return (
@@ -187,7 +191,7 @@ export default function ApprovalsPage() {
                   </tr>
                 );
               })}
-              {visibleRequests.length === 0 && (
+              {!loading && visibleRequests.length === 0 && (
                 <tr>
                   <td colSpan={8}>
                     <div className="sales-empty-state manager-empty">

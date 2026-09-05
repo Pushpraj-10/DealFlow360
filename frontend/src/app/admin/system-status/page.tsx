@@ -27,8 +27,8 @@ export default function SystemStatusPage() {
   }, []);
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page system-status-page">
+      <div className="admin-page-header system-status-page__header">
         <div>
           <p className="admin-eyebrow">Overview</p>
           <h1>System Status</h1>

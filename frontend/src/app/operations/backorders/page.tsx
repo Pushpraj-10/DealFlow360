@@ -8,13 +8,14 @@ type Backorder = { _id: string; fulfillment_id: string; quote_line_id: string; q
 
 export default function BackordersPage() {
   const [backorders, setBackorders] = useState<Backorder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = () => {
     api.get<Backorder[]>('/backorders').then(setBackorders).catch((err) =>
       setError(err instanceof ApiClientError ? err.message : 'Failed to load backorders')
-    );
+    ).finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -35,8 +36,8 @@ export default function BackordersPage() {
   const resolved = backorders.filter((b) => b.status === 'RESOLVED');
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="df-page backorders-page">
+      <div className="df-page-header backorders-page__header">
         <div>
           <h1 className="df-page-title">Backorders</h1>
           <p className="df-page-subtitle">
@@ -60,8 +61,14 @@ export default function BackordersPage() {
         </div>
       )}
 
-      <div className="df-card">
-        {backorders.length === 0 ? (
+      <div className="df-card backorders-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : backorders.length === 0 ? (
           <div className="df-empty">
             <AlertTriangle size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No backorders</div>

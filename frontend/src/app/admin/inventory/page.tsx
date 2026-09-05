@@ -24,6 +24,7 @@ function productName(row: Inventory) {
 
 export default function InventoryPage() {
   const [rows, setRows] = useState<Inventory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,12 +33,13 @@ export default function InventoryPage() {
       .then(setRows)
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load inventory')
-      );
+      )
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page inventory-page">
+      <div className="admin-page-header inventory-page__header">
         <div>
           <p className="admin-eyebrow">Operations</p>
           <h1>Inventory</h1>
@@ -52,8 +54,14 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {rows.length === 0 ? (
+      <div className="admin-panel inventory-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : rows.length === 0 ? (
           <div className="df-empty">
             <Boxes size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No inventory records</div>
