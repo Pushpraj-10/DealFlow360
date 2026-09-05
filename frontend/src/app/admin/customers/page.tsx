@@ -63,9 +63,7 @@ export default function CustomersPage() {
         setSelectedCustomerId((current) => current || d.customers[0]?._id || null);
       })
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'));
-    if (canCreate) {
-      api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
-    }
+    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
     api.get<{ quotations: QuotationListItem[] }>('/quotations').then((d) => setQuotations(d.quotations.map(normalizeQuotationCard))).catch(() => {});
   };
 

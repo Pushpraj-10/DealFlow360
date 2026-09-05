@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
-import { useAuth } from '@/lib/useAuth';
 import {
   AlertCircle,
   AlertTriangle,
@@ -57,10 +56,6 @@ type QuotationDetail = {
 };
 
 export default function QuotationsPage() {
-  const { user } = useAuth();
-  // Mirrors the backend's requireRoles() guards on /quotations (quotations.routes.js):
-  // only Sales Rep and Admin may create drafts, add lines, submit, or send.
-  const canEdit = user?.role === 'SALES_REP' || user?.role === 'ADMIN';
   const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,15 +79,13 @@ export default function QuotationsPage() {
 
   useEffect(() => {
     loadQuotations();
-    if (canEdit) {
-      api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
-    }
+    api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
     api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   }, []);
 
   const loadLines = (id: string) => {
     api
-      .get<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${id}`)
+      .get<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${id}`)
       .then((d) => {
         setLines(d.lines);
         setQuotationDetail(d.quotation || null);
@@ -132,7 +125,7 @@ export default function QuotationsPage() {
     if (!selectedId) return;
     setError(null);
     try {
-      const data = await api.post<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${selectedId}/lines`, {
+      const data = await api.post<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${selectedId}/lines`, {
         productId: lineForm.productId,
         quantity: Number(lineForm.quantity),
         discountPercent: Number(lineForm.discountPercent),
@@ -165,20 +158,6 @@ export default function QuotationsPage() {
     }
   };
 
-  const handleSend = async () => {
-    if (!selectedId) return;
-    setError(null);
-    setInfo(null);
-    try {
-      await api.post(`/quotations/${selectedId}/send`);
-      setInfo('Sent to customer - they can now review and confirm it from their portal.');
-      loadQuotations();
-      loadLines(selectedId);
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to send quotation to customer');
-    }
-  };
-
   const filteredQuotations = useMemo(() => {
     const term = search.trim().toLowerCase();
     return quotations.filter((quotation) => {
@@ -194,32 +173,18 @@ export default function QuotationsPage() {
 
   const statuses = Array.from(new Set(quotations.map((quotation) => quotation.status))).filter(Boolean);
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
-
+  
   // Calculate summary from lines
   const subtotal = lines.reduce((s, l) => s + (l.lineSubtotal || l.quantity * l.unitPrice), 0);
   const totalDiscount = lines.reduce((s, l) => s + (l.discountAmount || 0), 0);
   const totalTax = lines.reduce((s, l) => s + (l.tax || 0), 0);
   const grandTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const hasViolations = lines.some((l) => l.is_violation);
   const violationLines = lines.filter((l) => l.is_violation);
 
   // Use quotation detail for margin and risk if available
   const margin = quotationDetail?.marginPercentage;
   const riskSeverity = quotationDetail?.riskSeverity || selectedQuotation?.riskSeverity;
   const approvalStatus = quotationDetail?.approvalStatus || selectedQuotation?.approvalStatus;
-
-  // Mirrors the backend's own state-transition guards (quotations.controller.js):
-  // submit only from DRAFT/RETURNED_FOR_REVISION/REAPPROVAL_REQUIRED, send only
-  // from APPROVED/READY_FOR_CUSTOMER, and lines can't be edited once terminal.
-  const canSubmit = canEdit && selectedQuotation
-    ? ['DRAFT', 'RETURNED_FOR_REVISION', 'REAPPROVAL_REQUIRED'].includes(selectedQuotation.status)
-    : false;
-  const canSend = canEdit && selectedQuotation
-    ? ['APPROVED', 'READY_FOR_CUSTOMER'].includes(selectedQuotation.status)
-    : false;
-  const canEditLines = canEdit && selectedQuotation
-    ? !['REJECTED', 'CONFIRMED', 'EXPIRED', 'CANCELLED'].includes(selectedQuotation.status)
-    : false;
 
   return (
     <div className="sales-page">
@@ -229,12 +194,10 @@ export default function QuotationsPage() {
           <h1>Commercial workbench</h1>
           <p>Create drafts, review terms, and submit quotes without leaving the sales flow.</p>
         </div>
-        {canEdit && (
-          <button className="btn btn-primary" onClick={() => setShowNewForm(!showNewForm)}>
-            <Plus size={14} />
-            New quotation
-          </button>
-        )}
+        <button className="btn btn-primary" onClick={() => setShowNewForm(!showNewForm)}>
+          <Plus size={14} />
+          New quotation
+        </button>
       </div>
 
       {error && (
@@ -250,7 +213,7 @@ export default function QuotationsPage() {
         </div>
       )}
 
-      {showNewForm && canEdit && (
+      {showNewForm && (
         <form onSubmit={handleCreate} className="sales-inline-form">
           <label>
             <span>Customer</span>
@@ -370,7 +333,7 @@ export default function QuotationsPage() {
               {/* Product Lines */}
               <div className="quotation-lines-section">
                 <h3 className="quotation-section-title">Line items</h3>
-
+                
                 {lines.length === 0 ? (
                   <div className="quotation-empty-lines">
                     <p>No line items yet. Add products below to get started.</p>
@@ -381,7 +344,7 @@ export default function QuotationsPage() {
                       const productName = typeof line.productId === 'object' ? line.productId.name : line.productId;
                       const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
                       const excessDiscount = line.excess_discount ?? 0;
-
+                      
                       return (
                         <div key={line._id} className={`quotation-line-item ${line.is_violation ? 'has-violation' : ''}`}>
                           <div className="quotation-line-main">
@@ -401,7 +364,7 @@ export default function QuotationsPage() {
                               {money(line.lineTotal)}
                             </div>
                           </div>
-
+                          
                           {line.is_violation && (
                             <div className="quotation-line-violation">
                               <AlertTriangle size={13} />
@@ -421,61 +384,59 @@ export default function QuotationsPage() {
               </div>
 
               {/* Add Line Form */}
-              {canEditLines && (
-                <div className="quotation-add-line-section">
-                  <h3 className="quotation-section-title">Add line item</h3>
-                  <form onSubmit={handleAddLine} className="quotation-add-line-form">
-                    <div className="form-grid">
-                      <label className="form-field">
-                        <span className="form-label">Product</span>
-                        <select
-                          value={lineForm.productId}
-                          onChange={(e) => setLineForm({ ...lineForm, productId: e.target.value })}
-                          required
-                          className="df-select"
-                        >
-                          <option value="">Select product...</option>
-                          {products.map((p) => (
-                            <option key={p._id} value={p._id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="form-field">
-                        <span className="form-label">Quantity</span>
-                        <input
-                          type="number"
-                          value={lineForm.quantity}
-                          onChange={(e) => setLineForm({ ...lineForm, quantity: e.target.value })}
-                          className="df-input"
-                          min="1"
-                        />
-                      </label>
-                      <label className="form-field">
-                        <span className="form-label">Discount %</span>
-                        <input
-                          type="number"
-                          value={lineForm.discountPercent}
-                          onChange={(e) => setLineForm({ ...lineForm, discountPercent: e.target.value })}
-                          className="df-input"
-                          min="0"
-                          max="100"
-                        />
-                      </label>
-                    </div>
-                    <button type="submit" className="btn btn-secondary">
-                      <Plus size={14} />
-                      Add line
-                    </button>
-                  </form>
-                </div>
-              )}
+              <div className="quotation-add-line-section">
+                <h3 className="quotation-section-title">Add line item</h3>
+                <form onSubmit={handleAddLine} className="quotation-add-line-form">
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span className="form-label">Product</span>
+                      <select
+                        value={lineForm.productId}
+                        onChange={(e) => setLineForm({ ...lineForm, productId: e.target.value })}
+                        required
+                        className="df-select"
+                      >
+                        <option value="">Select product...</option>
+                        {products.map((p) => (
+                          <option key={p._id} value={p._id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span className="form-label">Quantity</span>
+                      <input
+                        type="number"
+                        value={lineForm.quantity}
+                        onChange={(e) => setLineForm({ ...lineForm, quantity: e.target.value })}
+                        className="df-input"
+                        min="1"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span className="form-label">Discount %</span>
+                      <input
+                        type="number"
+                        value={lineForm.discountPercent}
+                        onChange={(e) => setLineForm({ ...lineForm, discountPercent: e.target.value })}
+                        className="df-input"
+                        min="0"
+                        max="100"
+                      />
+                    </label>
+                  </div>
+                  <button type="submit" className="btn btn-secondary">
+                    <Plus size={14} />
+                    Add line
+                  </button>
+                </form>
+              </div>
             </div>
 
             {/* Commercial Summary - 30% Sticky */}
             <div className="quotation-summary-sidebar">
               <div className="quotation-summary-sticky">
                 <h3 className="quotation-summary-title">Commercial summary</h3>
-
+                
                 <div className="quotation-summary-section">
                   <div className="summary-line">
                     <span>Subtotal</span>
@@ -521,7 +482,6 @@ export default function QuotationsPage() {
                       <div className="summary-risk-details">
                         {violationLines.map((line) => {
                           const productName = typeof line.productId === 'object' ? line.productId.name : 'Product';
-                          const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
                           const excessDiscount = line.excess_discount ?? 0;
                           return (
                             <div key={line._id} className="risk-item">
@@ -546,20 +506,14 @@ export default function QuotationsPage() {
                   </div>
                 )}
 
-                {(canSubmit || canSend) && (
-                  <div className="quotation-summary-actions">
-                    {canSubmit && (
-                      <button onClick={handleSubmit} className="btn btn-primary btn-full">
-                        Submit for Approval
-                      </button>
-                    )}
-                    {canSend && (
-                      <button onClick={handleSend} className="btn btn-primary btn-full">
-                        Send to Customer
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="quotation-summary-actions">
+                  <button onClick={handleSubmit} className="btn btn-primary btn-full">
+                    Submit for Approval
+                  </button>
+                  <button className="btn btn-secondary btn-full" disabled>
+                    Save Draft
+                  </button>
+                </div>
               </div>
             </div>
           </div>

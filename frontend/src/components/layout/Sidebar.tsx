@@ -5,22 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
-  AlertTriangle,
   BadgePercent,
   BarChart2,
   Boxes,
   CheckSquare,
-  CreditCard,
-  Database,
-  FileCheck,
-  FileText,
   LayoutDashboard,
-  ListFilter,
   Package,
-  Receipt,
   RefreshCw,
-  Tag,
-  Truck,
   Users,
   Warehouse,
 } from 'lucide-react';
@@ -36,19 +27,10 @@ type NavGroup = {
   items: NavItem[];
 };
 
-// Admin sees every module - this is the union of everything verified
-// accessible to ADMIN across the backend's requireRoles() guards.
 const adminNavGroups: NavGroup[] = [
   {
     label: 'Overview',
     items: [{ label: 'Overview', href: '/', icon: <LayoutDashboard size={15} /> }],
-  },
-  {
-    label: 'Workspace',
-    items: [
-      { label: 'Quotations', href: '/sales/quotations', icon: <FileText size={15} /> },
-      { label: 'Approvals', href: '/sales/approvals', icon: <CheckSquare size={15} /> },
-    ],
   },
   {
     label: 'Sales',
@@ -61,29 +43,16 @@ const adminNavGroups: NavGroup[] = [
   {
     label: 'Operations',
     items: [
-      { label: 'Fulfillment', href: '/operations/fulfillment', icon: <Truck size={15} /> },
-      { label: 'Backorders', href: '/operations/backorders', icon: <AlertTriangle size={15} /> },
       { label: 'Warehouses', href: '/admin/warehouses', icon: <Warehouse size={15} /> },
       { label: 'Inventory', href: '/admin/inventory', icon: <Boxes size={15} /> },
       { label: 'Subscription Plans', href: '/admin/subscription-plans', icon: <RefreshCw size={15} /> },
     ],
   },
   {
-    label: 'Finance',
-    items: [
-      { label: 'Subscriptions', href: '/finance/subscriptions', icon: <RefreshCw size={15} /> },
-      { label: 'Invoices', href: '/finance/invoices', icon: <Receipt size={15} /> },
-      { label: 'Payments', href: '/finance/payments', icon: <CreditCard size={15} /> },
-      { label: 'Credit Notes', href: '/finance/credit-notes', icon: <CreditCard size={15} /> },
-    ],
-  },
-  {
     label: 'Governance',
     items: [
-      { label: 'Customer Tiers', href: '/admin/customer-tiers', icon: <Tag size={15} /> },
-      { label: 'Categories', href: '/admin/categories', icon: <ListFilter size={15} /> },
       { label: 'Discount Rules', href: '/admin/discount-rules', icon: <BadgePercent size={15} /> },
-      { label: 'Approval Rules', href: '/admin/approval-rules', icon: <FileCheck size={15} /> },
+      { label: 'Approval Rules', href: '/admin/approval-rules', icon: <CheckSquare size={15} /> },
     ],
   },
   {
@@ -91,7 +60,6 @@ const adminNavGroups: NavGroup[] = [
     items: [
       { label: 'Reports', href: '/management/reports', icon: <BarChart2 size={15} /> },
       { label: 'Deal Health', href: '/management/deal-health', icon: <Activity size={15} /> },
-      { label: 'System Status', href: '/admin/system-status', icon: <Database size={15} /> },
     ],
   },
 ];
