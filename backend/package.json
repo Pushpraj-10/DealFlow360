@@ -1,0 +1,34 @@
+{
+  "name": "dealflow360-backend",
+  "version": "1.0.0",
+  "description": "DealFlow360 backend API - B2B sales-ops quotation-to-cash platform",
+  "keywords": [
+    "dealflow360",
+    "b2b",
+    "sales-ops",
+    "express",
+    "mongoose",
+    "hackathon"
+  ],
+  "license": "ISC",
+  "author": "dhanesh",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "seed": "node src/seed/seed.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "prettier": "^3.9.6"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4"
+  }
+}
