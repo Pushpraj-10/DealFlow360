@@ -74,16 +74,14 @@ const auditLogSchema = new Schema(
     {timestamps: true}
 );
 
-auditLogSchema.pre('save', function preventAuditMutation(next) {
+auditLogSchema.pre('save', function preventAuditMutation() {
     if (!this.isNew && this.isModified()) {
-        return next(new Error('AuditLog entries are immutable'));
+        throw new Error('AuditLog entries are immutable');
     }
-
-    return next();
 });
 
-auditLogSchema.pre(['updateOne', 'findOneAndUpdate', 'updateMany', 'replaceOne', 'deleteOne', 'deleteMany', 'findOneAndDelete'], function blockAuditWrites(next) {
-    return next(new Error('AuditLog entries are immutable'));
+auditLogSchema.pre(['updateOne', 'findOneAndUpdate', 'updateMany', 'replaceOne', 'deleteOne', 'deleteMany', 'findOneAndDelete'], function blockAuditWrites() {
+    throw new Error('AuditLog entries are immutable');
 });
 
 export const AuditLog = mongoose.model('AuditLog', auditLogSchema);

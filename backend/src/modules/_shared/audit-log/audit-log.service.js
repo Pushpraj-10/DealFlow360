@@ -3,8 +3,7 @@ import { AuditLog } from '../../auditLogs/auditLog.model.js';
 /**
  * Thin wrapper around dhan's shared AuditLog model (modules/auditLogs) so the
  * fulfillment/subscriptions/invoicing/deal-health services can log actions
- * with the same call shape they were built against. `reason` has no
- * top-level column on that schema, so it's folded into `metadata.reason`.
+ * with the same call shape they were built against.
  *
  * @param {object} params
  * @param {string|null} [params.actorId] - User _id performing the action, or null for system actions.
@@ -32,12 +31,14 @@ const logAction = async ({
         [
             {
                 eventType: action,
+                action,
                 actorId,
                 entityType,
                 entityId,
                 quotationId,
                 customerId,
-                metadata: reason ? { ...metadata, reason } : metadata,
+                reason: reason || null,
+                metadata,
             },
         ],
         { session }

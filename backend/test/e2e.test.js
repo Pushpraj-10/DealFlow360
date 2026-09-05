@@ -133,7 +133,10 @@ before(async () => {
         Inventory.deleteMany({}),
         SubscriptionPlan.deleteMany({}),
         Subscription.deleteMany({}),
-        AuditLog.deleteMany({}),
+        // AuditLog is intentionally immutable (see auditLog.model.js) and
+        // not wiped here - the audit-trail assertion below scopes its query
+        // to this run's freshly-generated fulfillmentId, so stale rows from
+        // earlier runs never interfere.
     ]);
 
     const passwordHash = hashPassword('Password123!');
