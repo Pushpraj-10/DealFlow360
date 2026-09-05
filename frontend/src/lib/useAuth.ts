@@ -33,6 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Best-effort: clears the httpOnly cookie set at login. Fired without
+    // awaiting so a slow or already-expired session never delays sign-out,
+    // and local state is cleared unconditionally either way.
+    api.post('/auth/logout').catch(() => {});
     clearSession();
     setUser(null);
     router.push('/login');

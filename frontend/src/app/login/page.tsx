@@ -3,26 +3,55 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
-import { ApiClientError } from '@/lib/api';
-import { ArrowRight, AlertCircle } from 'lucide-react';
+import { api, ApiClientError } from '@/lib/api';
+import { ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+
+const PROPOSED_ROLES = [
+  { value: 'SALES_REP', label: 'Sales Rep' },
+  { value: 'SALES_MANAGER', label: 'Sales Manager' },
+  { value: 'FINANCE', label: 'Finance' },
+  { value: 'ADMIN', label: 'Admin' },
+];
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const [mode, setMode] = useState<'login' | 'request'>('login');
   const [email, setEmail] = useState('finance@dealflow360.test');
   const [password, setPassword] = useState('Password123!');
+  const [fullName, setFullName] = useState('');
+  const [proposedRole, setProposedRole] = useState('SALES_REP');
+  const [team, setTeam] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
+
+  const switchMode = (next: 'login' | 'request') => {
+    setMode(next);
+    setError(null);
+    setRequestSubmitted(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await login(email, password);
-      router.push('/');
+      if (mode === 'request') {
+        await api.post('/auth/signup-request', {
+          fullName,
+          email,
+          password,
+          proposedRole,
+          team: team || undefined,
+        });
+        setRequestSubmitted(true);
+      } else {
+        await login(email, password);
+        router.push('/');
+      }
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Login failed');
+      setError(err instanceof ApiClientError ? err.message : mode === 'request' ? 'Request failed' : 'Login failed');
     } finally {
       setSubmitting(false);
     }
@@ -80,7 +109,7 @@ export default function LoginPage() {
             Sales Operations
           </h1>
           <p style={{ color: '#A3AAB8', fontSize: 14, lineHeight: 1.6, maxWidth: 340 }}>
-            From quotation to fulfillment — manage your entire sales pipeline with built-in discount governance, 
+            From quotation to fulfillment — manage your entire sales pipeline with built-in discount governance,
             risk evaluation, and approval workflows.
           </p>
 
@@ -124,115 +153,229 @@ export default function LoginPage() {
         }}
       >
         <div style={{ width: '100%', maxWidth: 380 }}>
-          <div style={{ marginBottom: 36 }}>
-            <h2
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: 'var(--text-primary)',
-                letterSpacing: 0,
-                marginBottom: 6,
-              }}
-            >
-              Sign in to your workspace
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Enter your credentials to access DealFlow360. New internal accounts are created by an admin.
-            </p>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'var(--surface-02)', borderRadius: 'var(--radius)', padding: 4 }}>
+            {(['login', 'request'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => switchMode(m)}
+                style={{
+                  flex: 1,
+                  padding: '8px 0',
+                  borderRadius: 'calc(var(--radius) - 2px)',
+                  border: 'none',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: mode === m ? 'var(--surface-01)' : 'transparent',
+                  color: mode === m ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  boxShadow: mode === m ? 'var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06))' : 'none',
+                }}
+              >
+                {m === 'login' ? 'Sign in' : 'Request access'}
+              </button>
+            ))}
           </div>
 
-          {error && (
-            <div className="df-alert df-alert-error" style={{ marginBottom: 20 }}>
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="df-field">
-              <label className="df-label" htmlFor="email">Email address</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="df-input"
-                placeholder="you@company.com"
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="df-field">
-              <label className="df-label" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="df-input"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="btn btn-primary btn-full"
-              style={{ marginTop: 8, padding: '10px 20px', fontSize: 14, gap: 8 }}
-            >
-              {submitting ? 'Signing in…' : 'Sign in'}
-              {!submitting && <ArrowRight size={14} />}
-            </button>
-          </form>
-
-          {/* Seed account helper */}
-          <div
-            style={{
-              marginTop: 28,
-              padding: '12px 14px',
-              background: 'var(--surface-02)',
-              borderRadius: 'var(--radius)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, marginBottom: 6 }}>
-              DEMO ACCOUNTS
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {[
-                { role: 'Sales Rep', email: 'sales.rep@dealflow360.test' },
-                { role: 'Sales Manager', email: 'sales.manager@dealflow360.test' },
-                { role: 'Finance', email: 'finance@dealflow360.test' },
-                { role: 'Admin', email: 'admin@dealflow360.test' },
-                { role: 'Customer', email: 'customer@acme.test' },
-              ].map(({ role, email: e }) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setEmail(e)}
+          {mode === 'request' && requestSubmitted ? (
+            <div>
+              <div style={{ marginBottom: 20 }}>
+                <div
                   style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    background: 'var(--green-light)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'none',
-                    border: 'none',
-                    padding: '3px 0',
-                    cursor: 'pointer',
-                    textAlign: 'left',
+                    justifyContent: 'center',
+                    marginBottom: 16,
                   }}
                 >
-                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{role}</span>
-                  <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'monospace' }}>{e}</span>
-                </button>
-              ))}
+                  <CheckCircle2 size={20} color="var(--green)" />
+                </div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                  Request submitted
+                </h2>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  An admin will review your request for <strong>{formatRole(proposedRole)}</strong> access. You
+                  can sign in with the password you set once it's approved.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => switchMode('login')}
+                className="btn btn-ghost btn-full"
+                style={{ padding: '10px 20px', fontSize: 14 }}
+              >
+                Back to sign in
+              </button>
             </div>
-            <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>
-              Password: Password123!
-            </p>
-          </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 36 }}>
+                <h2
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 700,
+                    color: 'var(--text-primary)',
+                    letterSpacing: 0,
+                    marginBottom: 6,
+                  }}
+                >
+                  {mode === 'request' ? 'Request an internal account' : 'Sign in to your workspace'}
+                </h2>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {mode === 'request'
+                    ? 'Propose the role and team you need. An admin will review and approve it.'
+                    : 'Enter your credentials to access DealFlow360.'}
+                </p>
+              </div>
+
+              {error && (
+                <div className="df-alert df-alert-error" style={{ marginBottom: 20 }}>
+                  <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit}>
+                {mode === 'request' && (
+                  <div className="df-field">
+                    <label className="df-label" htmlFor="fullName">Full name</label>
+                    <input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="df-input"
+                      placeholder="Jane Doe"
+                      required
+                      autoComplete="name"
+                    />
+                  </div>
+                )}
+
+                <div className="df-field">
+                  <label className="df-label" htmlFor="email">Email address</label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="df-input"
+                    placeholder="you@company.com"
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="df-field">
+                  <label className="df-label" htmlFor="password">Password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="df-input"
+                    placeholder="••••••••"
+                    required
+                    minLength={mode === 'request' ? 8 : undefined}
+                    autoComplete={mode === 'request' ? 'new-password' : 'current-password'}
+                  />
+                </div>
+
+                {mode === 'request' && (
+                  <>
+                    <div className="df-field">
+                      <label className="df-label" htmlFor="proposedRole">Role you're requesting</label>
+                      <select
+                        id="proposedRole"
+                        value={proposedRole}
+                        onChange={(e) => setProposedRole(e.target.value)}
+                        className="df-select"
+                      >
+                        {PROPOSED_ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="df-field">
+                      <label className="df-label" htmlFor="team">Team (optional)</label>
+                      <input
+                        id="team"
+                        type="text"
+                        value={team}
+                        onChange={(e) => setTeam(e.target.value)}
+                        className="df-input"
+                        placeholder="e.g. east"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn btn-primary btn-full"
+                  style={{ marginTop: 8, padding: '10px 20px', fontSize: 14, gap: 8 }}
+                >
+                  {submitting
+                    ? mode === 'request' ? 'Submitting…' : 'Signing in…'
+                    : mode === 'request' ? 'Submit request' : 'Sign in'}
+                  {!submitting && <ArrowRight size={14} />}
+                </button>
+              </form>
+
+              {/* Seed account helper */}
+              {mode === 'login' && (
+                <div
+                  style={{
+                    marginTop: 28,
+                    padding: '12px 14px',
+                    background: 'var(--surface-02)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, marginBottom: 6 }}>
+                    DEMO ACCOUNTS
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {[
+                      { role: 'Sales Rep', email: 'sales.rep@dealflow360.test' },
+                      { role: 'Sales Manager', email: 'sales.manager@dealflow360.test' },
+                      { role: 'Finance', email: 'finance@dealflow360.test' },
+                      { role: 'Admin', email: 'admin@dealflow360.test' },
+                      { role: 'Customer', email: 'customer@acme.test' },
+                    ].map(({ role, email: e }) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => setEmail(e)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: 'none',
+                          border: 'none',
+                          padding: '3px 0',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{role}</span>
+                        <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'monospace' }}>{e}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                    Password: Password123!
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -245,4 +388,8 @@ export default function LoginPage() {
       `}</style>
     </div>
   );
+}
+
+function formatRole(role: string) {
+  return role.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

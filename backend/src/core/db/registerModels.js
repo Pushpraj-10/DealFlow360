@@ -8,6 +8,7 @@
  * which feature module happens to run first.
  */
 import '../../modules/users/user.model.js';
+import '../../modules/users/userSignupRequest.model.js';
 import '../../modules/customers/customer.model.js';
 import '../../modules/customerTiers/customerTier.model.js';
 import '../../modules/categories/category.model.js';
