@@ -40,6 +40,32 @@ const createPlan = async ({ name, cycle, proration_policy, cancellation_policy, 
     return subscriptionRepository.createPlan({ name, cycle, proration_policy, cancellation_policy, active });
 };
 
+const getPlanById = async (id) => {
+    const plan = await subscriptionRepository.findPlanById(id);
+    if (!plan) {
+        throw new ApiError(404, 'Subscription plan not found', [], '', ErrorCodes.NOT_FOUND);
+    }
+    return plan;
+};
+
+const updatePlan = async (id, data) => {
+    const plan = await subscriptionRepository.updatePlanById(id, data);
+    if (!plan) {
+        throw new ApiError(404, 'Subscription plan not found', [], '', ErrorCodes.NOT_FOUND);
+    }
+    return plan;
+};
+
+const deletePlan = async (id) => {
+    // Existing subscriptions reference their plan by id, so deleting one
+    // deactivates it instead of removing the row.
+    const plan = await subscriptionRepository.updatePlanById(id, { active: false });
+    if (!plan) {
+        throw new ApiError(404, 'Subscription plan not found', [], '', ErrorCodes.NOT_FOUND);
+    }
+    return plan;
+};
+
 const listSubscriptions = ({ customer_id, status } = {}) => {
     const filter = {};
     if (customer_id) filter.customer_id = customer_id;
@@ -309,6 +335,9 @@ const cancelSubscription = async (subscriptionId, { reason }, actorId) => {
 export {
     listPlans,
     createPlan,
+    getPlanById,
+    updatePlan,
+    deletePlan,
     listSubscriptions,
     listSubscriptionsByQuoteLineIds,
     getSubscriptionOrThrow,

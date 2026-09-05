@@ -12,6 +12,21 @@ const createPlan = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, plan, 'Subscription plan created'));
 });
 
+const getPlan = asyncHandler(async (req, res) => {
+    const plan = await subscriptionService.getPlanById(req.params.id);
+    return res.status(200).json(new ApiResponse(200, plan));
+});
+
+const updatePlan = asyncHandler(async (req, res) => {
+    const plan = await subscriptionService.updatePlan(req.params.id, req.body);
+    return res.status(200).json(new ApiResponse(200, plan, 'Subscription plan updated'));
+});
+
+const deletePlan = asyncHandler(async (req, res) => {
+    const plan = await subscriptionService.deletePlan(req.params.id);
+    return res.status(200).json(new ApiResponse(200, plan, 'Subscription plan deactivated'));
+});
+
 const listSubscriptions = asyncHandler(async (req, res) => {
     const subscriptions = await subscriptionService.listSubscriptions(req.query);
     return res.status(200).json(new ApiResponse(200, subscriptions));
@@ -46,6 +61,9 @@ const dryRunProration = asyncHandler(async (req, res) => {
 export {
     listPlans,
     createPlan,
+    getPlan,
+    updatePlan,
+    deletePlan,
     listSubscriptions,
     getSubscription,
     createSubscription,
