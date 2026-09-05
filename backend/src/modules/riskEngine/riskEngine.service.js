@@ -35,11 +35,7 @@ const buildRiskExplanation = ({riskScore, severity, totalRevenueAfterDiscount, t
     return `Blended discount risk is ${severity}: weighted excess discount score is ${riskScore}, based on each violating line's excess discount multiplied by its revenue share. Total excess discount exposure is ${totalExcessDiscountExposure} across ${totalRevenueAfterDiscount} revenue after discount.${worstLineText}`;
 };
 
-const calculateQuotationRisk = async (quotationId, thresholds = getRiskThresholds()) => {
-    const lines = await QuotationLine.find({quotationId})
-    .populate('productId', 'name')
-    .populate('variantId', 'sku name');
-
+const calculateBlendedRiskFromLines = (lines, thresholds = getRiskThresholds()) => {
     if (!lines.length) {
         return {
             totalRiskScore: 0,
@@ -70,8 +66,8 @@ const calculateQuotationRisk = async (quotationId, thresholds = getRiskThreshold
         const revenueAfterDiscount = Number(line.revenueAfterDiscount || 0);
         const revenueShare = revenueAfterDiscount / totalRevenueAfterDiscount;
         const weightedContribution = Math.round((excessDiscount * revenueShare + Number.EPSILON) * 100) / 100;
-        const exposureAmount = Math.round((line.lineSubtotal * (excessDiscount / 100) + Number.EPSILON) * 100) / 100;
-        const productName = line.productId?.name || 'Unknown product';
+        const exposureAmount = Math.round(((line.lineSubtotal || 0) * (excessDiscount / 100) + Number.EPSILON) * 100) / 100;
+        const productName = line.productName || line.productId?.name || 'Unknown product';
 
         totalRiskScore += weightedContribution;
         totalExcessDiscountExposure += exposureAmount;
@@ -79,7 +75,7 @@ const calculateQuotationRisk = async (quotationId, thresholds = getRiskThreshold
         const item = {
             lineId: line._id,
             productName,
-            variantName: line.variantId?.name || line.variantId?.sku || null,
+            variantName: line.variantName || line.variantId?.name || line.variantId?.sku || null,
             actualDiscount,
             allowedDiscount,
             excessDiscount,
@@ -120,8 +116,17 @@ const calculateQuotationRisk = async (quotationId, thresholds = getRiskThreshold
     };
 };
 
+const calculateQuotationRisk = async (quotationId, thresholds = getRiskThresholds()) => {
+    const lines = await QuotationLine.find({quotationId})
+    .populate('productId', 'name')
+    .populate('variantId', 'sku name');
+
+    return calculateBlendedRiskFromLines(lines, thresholds);
+};
+
 const riskEngineService = Object.freeze({
     moduleName: 'riskEngine',
+    calculateBlendedRiskFromLines,
     calculateQuotationRisk,
     getRiskThresholds,
     getSeverity
@@ -129,6 +134,7 @@ const riskEngineService = Object.freeze({
 
 export {
     riskEngineService,
+    calculateBlendedRiskFromLines,
     calculateQuotationRisk,
     getRiskThresholds,
     getSeverity

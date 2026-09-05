@@ -6,6 +6,7 @@ import {
     createApprovalRule,
     decideApprovalRequest,
     deleteApprovalRule,
+    getApprovalRequestDetail,
     getApprovalsModuleStatus,
     listMyPendingApprovalRequests,
     listApprovalRules,
@@ -43,6 +44,13 @@ router
 .post(
     requireRoles(USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE, USER_ROLES.ADMIN),
     decideApprovalRequest('RETURNED')
+);
+
+router
+.route('/requests/:approvalRequestId')
+.get(
+    requireRoles(USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE, USER_ROLES.ADMIN),
+    getApprovalRequestDetail
 );
 
 router

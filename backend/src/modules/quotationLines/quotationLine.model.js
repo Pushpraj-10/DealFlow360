@@ -35,6 +35,11 @@ const quotationLineSchema = new Schema(
             required: true,
             min: 0
         },
+        isNegotiatedPrice: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
         costPrice: {
             type: Number,
             required: true,

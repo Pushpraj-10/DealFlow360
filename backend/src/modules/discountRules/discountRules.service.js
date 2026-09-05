@@ -87,6 +87,38 @@ const buildReason = (tierLimit, categoryLimit, allowedDiscountPercent) => {
     return `Product category ${categoryLimit.name} is stricter at ${categoryLimit.percent}% than customer tier ${tierLimit.name} at ${tierLimit.percent}%.`;
 };
 
+const resolveAllowedDiscountFromLimits = ({tierName, tierPercent, categoryName, categoryPercent}) => {
+    const tierLimit = {
+        name: tierName,
+        percent: readPercent(tierPercent),
+        source: 'CUSTOMER_TIER_DEFAULT',
+        sourceId: null
+    };
+    const categoryLimit = {
+        name: categoryName,
+        percent: readPercent(categoryPercent),
+        source: 'PRODUCT_CATEGORY_DEFAULT',
+        sourceId: null
+    };
+
+    if (tierLimit.percent === null || categoryLimit.percent === null) {
+        throw new ApiError(400, 'Discount limits must be configured for customer tier and product category');
+    }
+
+    const allowedDiscountPercent = Math.min(tierLimit.percent, categoryLimit.percent);
+    const limitingRule = tierLimit.percent <= categoryLimit.percent ? tierLimit : categoryLimit;
+
+    return {
+        allowedDiscountPercent,
+        reason: buildReason(tierLimit, categoryLimit, allowedDiscountPercent),
+        limitingSource: limitingRule.source,
+        limits: {
+            customerTier: tierLimit,
+            productCategory: categoryLimit
+        }
+    };
+};
+
 const getAllowedDiscount = async (customer, product) => {
     if (!customer || !product) {
         throw new ApiError(400, 'Customer and product are required to calculate allowed discount');
@@ -116,10 +148,12 @@ const getAllowedDiscount = async (customer, product) => {
 
 const discountRulesService = Object.freeze({
     moduleName: 'discountRules',
+    resolveAllowedDiscountFromLimits,
     getAllowedDiscount
 });
 
 export {
     discountRulesService,
+    resolveAllowedDiscountFromLimits,
     getAllowedDiscount
 };

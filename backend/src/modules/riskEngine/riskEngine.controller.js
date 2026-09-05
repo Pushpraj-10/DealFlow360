@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 
+import {AUDIT_ACTIONS} from '../../core/constants.js';
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
+import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {Quotation} from '../quotations/quotation.model.js';
 import {calculateQuotationRisk} from './riskEngine.service.js';
 
@@ -28,6 +30,17 @@ const getQuotationRiskById = asyncHandler(async (req, res) => {
     }
 
     const risk = await calculateQuotationRisk(req.params.quotationId);
+    const quotation = await Quotation.findById(req.params.quotationId).select('customerId');
+
+    await createAuditLog({
+        actor: req.user,
+        action: AUDIT_ACTIONS.RISK_CALCULATED,
+        entityType: 'Quotation',
+        entityId: req.params.quotationId,
+        quotationId: req.params.quotationId,
+        customerId: quotation.customerId,
+        after: risk
+    });
 
     return res
     .status(200)

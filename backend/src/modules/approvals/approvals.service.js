@@ -1,6 +1,9 @@
-import {APPROVAL_STATUSES, APPROVAL_STEP_STATUSES, QUOTATION_STATUSES} from '../../core/constants.js';
+import {APPROVAL_STATUSES, APPROVAL_STEP_STATUSES, AUDIT_ACTIONS, QUOTATION_STATUSES} from '../../core/constants.js';
 import {ApiError} from '../../core/utils/apiError.js';
+import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {Quotation} from '../quotations/quotation.model.js';
+import {transitionQuotationState} from '../quotations/quotationState.service.js';
+import {QuotationVersion} from '../quotations/quotationVersion.model.js';
 import {ApprovalRequest} from './approval.model.js';
 import {ApprovalRule} from './approvalRule.model.js';
 
@@ -104,13 +107,20 @@ const applyApprovalDecision = async ({approvalRequestId, reviewer, decision, rea
 
     if (decision === APPROVAL_STEP_STATUSES.REJECTED) {
         approvalRequest.status = APPROVAL_STATUSES.REJECTED;
-        quotation.status = QUOTATION_STATUSES.REJECTED;
         quotation.approvalStatus = APPROVAL_STATUSES.REJECTED;
+        await transitionQuotationState(quotation, QUOTATION_STATUSES.REJECTED, {
+            actor: reviewer,
+            reason,
+            metadata: {approvalRequestId}
+        });
     } else if (decision === APPROVAL_STEP_STATUSES.RETURNED) {
         approvalRequest.status = APPROVAL_STATUSES.RETURNED;
-        quotation.status = QUOTATION_STATUSES.DRAFT;
         quotation.approvalStatus = APPROVAL_STATUSES.RETURNED;
-        quotation.currentVersion += 1;
+        await transitionQuotationState(quotation, QUOTATION_STATUSES.RETURNED_FOR_REVISION, {
+            actor: reviewer,
+            reason,
+            metadata: {approvalRequestId}
+        });
     } else if (decision === APPROVAL_STEP_STATUSES.APPROVED) {
         const nextStep = approvalRequest.steps
         .sort((left, right) => left.sequence - right.sequence)
@@ -120,8 +130,12 @@ const applyApprovalDecision = async ({approvalRequestId, reviewer, decision, rea
             nextStep.status = APPROVAL_STEP_STATUSES.ACTIVE;
         } else {
             approvalRequest.status = APPROVAL_STATUSES.APPROVED;
-            quotation.status = QUOTATION_STATUSES.APPROVED;
             quotation.approvalStatus = APPROVAL_STATUSES.APPROVED;
+            await transitionQuotationState(quotation, QUOTATION_STATUSES.APPROVED, {
+                actor: reviewer,
+                reason,
+                metadata: {approvalRequestId}
+            });
         }
     } else {
         throw new ApiError(400, 'Invalid approval decision');
@@ -129,6 +143,52 @@ const applyApprovalDecision = async ({approvalRequestId, reviewer, decision, rea
 
     await approvalRequest.save();
     await quotation.save();
+
+    await QuotationVersion.findOneAndUpdate(
+        {
+            quotationId: quotation._id,
+            versionNumber: quotation.currentVersion
+        },
+        {
+            $set: {
+                status: quotation.status,
+                approvalStatus: quotation.approvalStatus,
+                riskScore: quotation.riskScore,
+                riskSeverity: quotation.riskSeverity
+            }
+        }
+    );
+
+    const actionMap = {
+        [APPROVAL_STEP_STATUSES.APPROVED]: AUDIT_ACTIONS.APPROVAL_APPROVED,
+        [APPROVAL_STEP_STATUSES.REJECTED]: AUDIT_ACTIONS.APPROVAL_REJECTED,
+        [APPROVAL_STEP_STATUSES.RETURNED]: AUDIT_ACTIONS.APPROVAL_RETURNED
+    };
+
+    await createAuditLog({
+        actor: reviewer,
+        action: actionMap[decision],
+        entityType: 'ApprovalRequest',
+        entityId: approvalRequest._id,
+        quotationId: approvalRequest.quotationId,
+        reason,
+        before: {
+            activeStep: {
+                sequence: activeStep.sequence,
+                requiredRole: activeStep.requiredRole,
+                status: APPROVAL_STEP_STATUSES.ACTIVE
+            }
+        },
+        after: {
+            requestStatus: approvalRequest.status,
+            quotationStatus: quotation.status,
+            step: {
+                sequence: activeStep.sequence,
+                requiredRole: activeStep.requiredRole,
+                status: activeStep.status
+            }
+        }
+    });
 
     return {
         approvalRequest,

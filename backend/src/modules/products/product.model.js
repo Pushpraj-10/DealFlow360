@@ -74,6 +74,11 @@ const productSchema = new Schema(
             trim: true,
             default: null
         },
+        recurringPlanReference: {
+            type: String,
+            trim: true,
+            default: null
+        },
     },
     {timestamps: true}
 );

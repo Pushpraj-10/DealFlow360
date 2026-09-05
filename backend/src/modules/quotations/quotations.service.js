@@ -1,12 +1,16 @@
 import {QuotationLine} from '../quotationLines/quotationLine.model.js';
-import {CUSTOMER_STATUSES} from '../../core/constants.js';
+import {AUDIT_ACTIONS, APPROVAL_STATUSES, CUSTOMER_STATUSES, QUOTATION_STATUSES} from '../../core/constants.js';
 import {ApiError} from '../../core/utils/apiError.js';
+import {ApprovalRequest} from '../approvals/approval.model.js';
+import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {Customer} from '../customers/customer.model.js';
 import {getAllowedDiscount} from '../discountRules/discountRules.service.js';
 import {resolveSellingPrice} from '../priceLists/priceLists.service.js';
 import {Product} from '../products/product.model.js';
 import {ProductVariant} from '../products/productVariant.model.js';
 import {Quotation} from './quotation.model.js';
+import {QuotationVersion} from './quotationVersion.model.js';
+import {transitionQuotationState} from './quotationState.service.js';
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -79,6 +83,127 @@ const calculateQuotationTotals = async (quotationId) => {
     });
 };
 
+const buildQuotationSnapshot = async (quotationId) => {
+    const [quotation, lines] = await Promise.all([
+        Quotation.findById(quotationId).lean(),
+        QuotationLine.find({quotationId}).lean().sort({createdAt: 1})
+    ]);
+
+    if (!quotation) {
+        throw new ApiError(404, 'Quotation not found');
+    }
+
+    return {
+        quotation,
+        lines,
+        totals: {
+            subtotal: quotation.subtotal,
+            totalDiscount: quotation.totalDiscount,
+            totalRevenueAfterDiscount: quotation.totalRevenueAfterDiscount,
+            totalCost: quotation.totalCost,
+            tax: quotation.tax,
+            grandTotal: quotation.grandTotal,
+            margin: quotation.margin,
+            totalMarginAmount: quotation.totalMarginAmount,
+            grossMarginAmount: quotation.grossMarginAmount,
+            marginPercentage: quotation.marginPercentage
+        }
+    };
+};
+
+const createQuotationVersionSnapshot = async (quotationId, {actor = null, reason = null} = {}) => {
+    const {quotation, lines, totals} = await buildQuotationSnapshot(quotationId);
+    const existingVersion = await QuotationVersion.findOne({
+        quotationId,
+        versionNumber: quotation.currentVersion
+    });
+
+    if (existingVersion) {
+        return existingVersion;
+    }
+
+    const version = await QuotationVersion.create({
+        quotationId,
+        versionNumber: quotation.currentVersion,
+        status: quotation.status,
+        approvalStatus: quotation.approvalStatus,
+        riskScore: quotation.riskScore,
+        riskSeverity: quotation.riskSeverity,
+        totals,
+        lines,
+        snapshotReason: reason,
+        createdById: actor?.id || actor?._id || null
+    });
+
+    await createAuditLog({
+        actor,
+        action: AUDIT_ACTIONS.QUOTATION_VERSION_CREATED,
+        entityType: 'QuotationVersion',
+        entityId: version._id,
+        quotationId,
+        customerId: quotation.customerId,
+        reason,
+        after: {
+            versionNumber: version.versionNumber,
+            status: version.status,
+            approvalStatus: version.approvalStatus
+        }
+    });
+
+    return version;
+};
+
+const prepareQuotationForMaterialChange = async (quotation, {actor = null, reason = 'Material quotation change'} = {}) => {
+    const draftLikeStatuses = [
+        QUOTATION_STATUSES.DRAFT,
+        QUOTATION_STATUSES.REAPPROVAL_REQUIRED
+    ];
+
+    if (draftLikeStatuses.includes(quotation.status)) {
+        return quotation;
+    }
+
+    const before = {
+        status: quotation.status,
+        currentVersion: quotation.currentVersion,
+        approvalStatus: quotation.approvalStatus
+    };
+
+    await createQuotationVersionSnapshot(quotation._id, {actor, reason});
+
+    await ApprovalRequest.updateMany(
+        {quotationId: quotation._id, status: APPROVAL_STATUSES.PENDING},
+        {$set: {status: APPROVAL_STATUSES.CANCELLED}}
+    );
+
+    quotation.currentVersion += 1;
+    quotation.approvalStatus = APPROVAL_STATUSES.PENDING;
+    await transitionQuotationState(quotation, QUOTATION_STATUSES.REAPPROVAL_REQUIRED, {
+        actor,
+        reason,
+        metadata: {materialChange: true}
+    });
+
+    await createAuditLog({
+        actor,
+        action: AUDIT_ACTIONS.QUOTATION_VERSION_CREATED,
+        entityType: 'Quotation',
+        entityId: quotation._id,
+        quotationId: quotation._id,
+        customerId: quotation.customerId,
+        reason,
+        before,
+        after: {
+            status: quotation.status,
+            currentVersion: quotation.currentVersion,
+            approvalStatus: quotation.approvalStatus
+        },
+        metadata: {type: 'NEW_EDITABLE_VERSION'}
+    });
+
+    return quotation;
+};
+
 const recalculateQuotationCommercials = async (quotationId) => {
     const quotation = await Quotation.findById(quotationId);
 
@@ -110,12 +235,14 @@ const recalculateQuotationCommercials = async (quotationId) => {
             throw new ApiError(400, `Active product variant not found for quotation line ${line._id}`);
         }
 
-        const pricing = await resolveSellingPrice({
-            customer,
-            product,
-            variant,
-            currencyCode: quotation.currencyCode
-        });
+        const pricing = line.isNegotiatedPrice
+            ? {sellingPrice: line.unitPrice, source: 'NEGOTIATED_PRICE'}
+            : await resolveSellingPrice({
+                customer,
+                product,
+                variant,
+                currencyCode: quotation.currencyCode
+            });
         const allowedDiscount = await getAllowedDiscount(customer, product);
         const amounts = calculateLineAmounts({
             quantity: line.quantity,
@@ -162,10 +289,73 @@ const recalculateQuotationCommercials = async (quotationId) => {
     };
 };
 
+const buildConfirmedQuotationOrderSnapshot = async (quotationId) => {
+    const quotation = await Quotation.findById(quotationId).lean();
+
+    if (!quotation) {
+        throw new ApiError(404, 'Quotation not found');
+    }
+
+    if (quotation.status !== QUOTATION_STATUSES.CONFIRMED) {
+        throw new ApiError(400, 'Only confirmed quotations can be converted into orders');
+    }
+
+    const lines = await QuotationLine.find({quotationId})
+    .populate('productId', 'billingType recurringPlanReference')
+    .populate('variantId', 'sku name attributes')
+    .lean()
+    .sort({createdAt: 1});
+
+    return {
+        quotationId: quotation._id,
+        quotationVersion: quotation.confirmedVersion || quotation.currentVersion,
+        customerId: quotation.customerId,
+        currency: quotation.currencyCode,
+        confirmedAt: quotation.confirmedAt,
+        confirmedById: quotation.confirmedById,
+        totals: {
+            subtotal: quotation.subtotal,
+            totalDiscount: quotation.totalDiscount,
+            revenueAfterDiscount: quotation.totalRevenueAfterDiscount,
+            tax: quotation.tax,
+            grandTotal: quotation.grandTotal
+        },
+        lines: lines.map((line) => ({
+            quotationLineId: line._id,
+            productId: line.productId?._id || line.productId,
+            variant: line.variantId ? {
+                id: line.variantId._id,
+                sku: line.variantId.sku,
+                name: line.variantId.name,
+                attributes: line.variantId.attributes || {}
+            } : null,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            discount: {
+                percent: line.discountPercent,
+                amount: line.discountAmount
+            },
+            tax: {
+                percent: line.taxPercentage,
+                amount: line.tax
+            },
+            lineTotal: line.lineTotal,
+            revenueAfterDiscount: line.revenueAfterDiscount,
+            type: line.lineType,
+            recurringPlanReference: line.lineType === 'RECURRING'
+                ? line.productId?.recurringPlanReference || null
+                : null
+        }))
+    };
+};
+
 const quotationsService = Object.freeze({
     moduleName: 'quotations',
     calculateLineAmounts,
     calculateQuotationTotals,
+    buildConfirmedQuotationOrderSnapshot,
+    createQuotationVersionSnapshot,
+    prepareQuotationForMaterialChange,
     recalculateQuotationCommercials,
     roundMoney,
     roundPercent
@@ -175,6 +365,9 @@ export {
     quotationsService,
     calculateLineAmounts,
     calculateQuotationTotals,
+    buildConfirmedQuotationOrderSnapshot,
+    createQuotationVersionSnapshot,
+    prepareQuotationForMaterialChange,
     recalculateQuotationCommercials,
     roundMoney,
     roundPercent

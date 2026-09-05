@@ -4,6 +4,7 @@ import {USER_ROLES} from '../../core/constants.js';
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
+import {ApprovalRequest} from './approval.model.js';
 import {ApprovalRule} from './approvalRule.model.js';
 import {
     applyApprovalDecision,
@@ -175,6 +176,42 @@ const listMyPendingApprovalRequests = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {approvalRequests}, 'Pending approval requests fetched successfully'));
 });
 
+const getApprovalRequestDetail = asyncHandler(async (req, res) => {
+    validateObjectId(req.params.approvalRequestId, 'approval request id');
+
+    if (![USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE, USER_ROLES.ADMIN].includes(req.user.role)) {
+        throw new ApiError(403, 'Only approvers can view approval request detail');
+    }
+
+    const approvalRequest = await ApprovalRequest.findById(req.params.approvalRequestId)
+    .populate({
+        path: 'quotationId',
+        populate: [
+            {path: 'customerId', select: 'name company email tierId'},
+            {path: 'ownerId', select: 'fullName email role'},
+            {path: 'salesRepId', select: 'fullName email role'}
+        ]
+    })
+    .populate('requestedById', 'fullName email role')
+    .populate('steps.reviewerId', 'fullName email role');
+
+    if (!approvalRequest) {
+        throw new ApiError(404, 'Approval request not found');
+    }
+
+    const isRelevantApprover = approvalRequest.steps.some(
+        (step) => step.requiredRole === req.user.role || req.user.role === USER_ROLES.ADMIN
+    );
+
+    if (!isRelevantApprover) {
+        throw new ApiError(403, 'This approval request is not visible for your role');
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {approvalRequest}, 'Approval request detail fetched successfully'));
+});
+
 const decideApprovalRequest = (decision) => asyncHandler(async (req, res) => {
     validateObjectId(req.params.approvalRequestId, 'approval request id');
 
@@ -201,5 +238,6 @@ export {
     updateApprovalRule,
     deleteApprovalRule,
     listMyPendingApprovalRequests,
+    getApprovalRequestDetail,
     decideApprovalRequest
 };

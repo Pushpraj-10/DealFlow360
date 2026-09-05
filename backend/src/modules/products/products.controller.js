@@ -70,6 +70,12 @@ const buildProductPayload = async (body, {partial = false} = {}) => {
         payload.description = isBlank(body.description) ? null : body.description;
     }
 
+    if (Object.hasOwn(body, 'recurringPlanReference')) {
+        payload.recurringPlanReference = isBlank(body.recurringPlanReference)
+            ? null
+            : body.recurringPlanReference;
+    }
+
     if (Object.hasOwn(body, 'categoryId')) {
         await validateCategory(body.categoryId);
         payload.categoryId = body.categoryId;

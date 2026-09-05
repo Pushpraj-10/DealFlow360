@@ -114,6 +114,20 @@ const quotationSchema = new Schema(
         requestedDeliveryDate: {
             type: Date,
             default: null
+        },
+        confirmedById: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
+        confirmedAt: {
+            type: Date,
+            default: null
+        },
+        confirmedVersion: {
+            type: Number,
+            default: null,
+            min: 1
         }
     },
     {timestamps: true}
