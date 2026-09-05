@@ -17,6 +17,7 @@ import {
     getQuotationPipeline,
     getQuotationVersion,
     getCustomerPortalQuotation,
+    listCustomerPortalQuotations,
     listQuotationVersions,
     listQuotations,
     sendQuotationToCustomer,
@@ -29,11 +30,15 @@ const router = Router();
 router
 .route('/')
 .get(authenticate, requireInternalUser, listQuotations)
-.post(authenticate, requireRoles(USER_ROLES.SALES_REP), createDraftQuotation);
+.post(authenticate, requireRoles(USER_ROLES.SALES_REP, USER_ROLES.ADMIN), createDraftQuotation);
 
 router
 .route('/pipeline')
 .get(authenticate, requireInternalUser, getQuotationPipeline);
+
+router
+.route('/portal')
+.get(authenticate, requireRoles(USER_ROLES.CUSTOMER), listCustomerPortalQuotations);
 
 router
 .route('/:quotationId')

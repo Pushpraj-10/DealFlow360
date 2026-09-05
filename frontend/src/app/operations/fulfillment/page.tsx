@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, Truck, Plus, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Truck, Plus, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type Fulfillment = { _id: string; quotation_id: string; status: string; created_at: string };
 type Allocation = {
@@ -28,10 +29,12 @@ function getStatusClass(status: string): string {
 }
 
 export default function FulfillmentPage() {
+  const router = useRouter();
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [newQuotationId, setNewQuotationId] = useState('');
   const [shipQty, setShipQty] = useState<Record<string, string>>({});
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -89,6 +92,22 @@ export default function FulfillmentPage() {
       loadList();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Action failed');
+    }
+  };
+
+  const warehouseName = (id: string) => warehouses.find((w) => w._id === id)?.name || id.slice(-8);
+
+  const generateInvoice = async (allocationId: string) => {
+    setError(null);
+    setInfo(null);
+    try {
+      const invoice = await api.post<{ invoice_no: string }>('/invoices', {
+        source_type: 'shipment',
+        fulfillment_allocation_id: allocationId,
+      });
+      setInfo(`Invoice ${invoice.invoice_no} generated for the shipped quantity.`);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to generate invoice');
     }
   };
 
@@ -226,6 +245,17 @@ export default function FulfillmentPage() {
             <span>{error}</span>
           </div>
         )}
+        {info && (
+          <div className="df-alert df-alert-success" style={{ margin: '16px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+              {info}
+            </span>
+            <button onClick={() => router.push('/finance/invoices')} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+              View Invoices
+            </button>
+          </div>
+        )}
 
         {!detail && (
           <div className="df-empty" style={{ paddingTop: 80 }}>
@@ -291,6 +321,7 @@ export default function FulfillmentPage() {
                     <th style={{ textAlign: 'right' }}>Shipped</th>
                     <th>Status</th>
                     <th style={{ textAlign: 'right' }}>Ship</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -301,8 +332,8 @@ export default function FulfillmentPage() {
                           a.quote_line_id?.variantId?.sku ||
                           '—'}
                       </td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: 12, fontFamily: 'monospace' }}>
-                        {a.warehouse_id}
+                      <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                        {warehouseName(a.warehouse_id)}
                       </td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{a.allocated_qty}</td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
@@ -322,6 +353,7 @@ export default function FulfillmentPage() {
                               setShipQty({ ...shipQty, [a._id]: e.target.value })
                             }
                             placeholder="qty"
+                            disabled={a.allocated_qty - a.shipped_qty <= 0}
                           />
                           <button
                             onClick={() =>
@@ -333,16 +365,28 @@ export default function FulfillmentPage() {
                               )
                             }
                             className="btn btn-primary btn-sm"
+                            disabled={a.allocated_qty - a.shipped_qty <= 0}
                           >
                             Ship
                           </button>
                         </div>
                       </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {a.shipped_qty > 0 && (
+                          <button
+                            onClick={() => generateInvoice(a._id)}
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--accent)', fontSize: 12 }}
+                          >
+                            Generate Invoice
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {detail.allocations.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)', fontSize: 13 }}>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-tertiary)', fontSize: 13 }}>
                         No allocations yet — click &quot;Suggest Split&quot; to allocate inventory.
                       </td>
                     </tr>

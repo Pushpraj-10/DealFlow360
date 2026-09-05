@@ -954,6 +954,28 @@ const confirmQuotation = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {quotation: updatedQuotation}, 'Quotation confirmed successfully'));
 });
 
+const listCustomerPortalQuotations = asyncHandler(async (req, res) => {
+    const quotations = await Quotation.find({
+        customerId: req.user.customerId,
+        status: {$nin: [QUOTATION_STATUSES.DRAFT, QUOTATION_STATUSES.PENDING_APPROVAL]}
+    })
+    .select('quoteNumber status grandTotal currencyCode createdAt updatedAt')
+    .sort({updatedAt: -1});
+
+    const items = quotations.map((quotation) => ({
+        id: quotation._id,
+        quoteNumber: quotation.quoteNumber,
+        status: quotation.status,
+        grandTotal: quotation.grandTotal,
+        currencyCode: quotation.currencyCode,
+        updatedAt: quotation.updatedAt
+    }));
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {quotations: items}, 'Portal quotations fetched successfully'));
+});
+
 const getCustomerPortalQuotation = asyncHandler(async (req, res) => {
     const quotation = await Quotation.findById(req.params.quotationId)
     .select('quoteNumber customerId status currencyCode subtotal totalDiscount totalRevenueAfterDiscount tax grandTotal currentVersion createdAt updatedAt')
@@ -1077,5 +1099,6 @@ export {
     getConfirmedQuotationOrderSnapshot,
     sendQuotationToCustomer,
     confirmQuotation,
-    getCustomerPortalQuotation
+    getCustomerPortalQuotation,
+    listCustomerPortalQuotations
 };

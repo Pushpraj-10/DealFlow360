@@ -9,7 +9,7 @@ import { ArrowRight, AlertCircle } from 'lucide-react';
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState('ops@dealflow360.dev');
+  const [email, setEmail] = useState('finance@dealflow360.test');
   const [password, setPassword] = useState('Password123!');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -203,9 +203,11 @@ export default function LoginPage() {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {[
-                { role: 'Sales Rep', email: 'rep@dealflow360.dev' },
-                { role: 'Operations', email: 'ops@dealflow360.dev' },
-                { role: 'Admin', email: 'admin@dealflow360.dev' },
+                { role: 'Sales Rep', email: 'sales.rep@dealflow360.test' },
+                { role: 'Sales Manager', email: 'sales.manager@dealflow360.test' },
+                { role: 'Finance', email: 'finance@dealflow360.test' },
+                { role: 'Admin', email: 'admin@dealflow360.test' },
+                { role: 'Customer', email: 'customer@acme.test' },
               ].map(({ role, email: e }) => (
                 <button
                   key={e}

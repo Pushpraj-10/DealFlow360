@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, clearSession, getStoredUser, setSession, type CurrentUser } from './api';
 
+type AuthContextValue = {
+  user: CurrentUser | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<CurrentUser>;
+  logout: () => void;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
 type LoginResponse = { user: CurrentUser; accessToken: string };
 
-export function useAuth() {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,5 +38,13 @@ export function useAuth() {
     router.push('/login');
   }, [router]);
 
-  return { user, loading, login, logout };
+  return React.createElement(AuthContext.Provider, { value: { user, loading, login, logout } }, children);
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
 }

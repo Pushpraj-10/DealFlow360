@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, Users } from 'lucide-react';
 
 type Tier = { _id: string; name: string };
@@ -22,6 +23,8 @@ function getStatusClass(status: string): string {
 }
 
 export default function CustomersPage() {
+  const { user } = useAuth();
+  const canCreate = user?.role === 'ADMIN';
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -57,10 +60,12 @@ export default function CustomersPage() {
           <h1 className="df-page-title">Customers</h1>
           <p className="df-page-subtitle">{customers.length} customer{customers.length !== 1 ? 's' : ''} in your workspace</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Customer
-        </button>
+        {canCreate && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Customer
+          </button>
+        )}
       </div>
 
       {error && (
@@ -75,7 +80,9 @@ export default function CustomersPage() {
           <div className="df-empty">
             <Users size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No customers yet</div>
-            <div className="df-empty-desc">Add your first customer to start building your pipeline.</div>
+            <div className="df-empty-desc">
+              {canCreate ? 'Add your first customer to start building your pipeline.' : 'No customers have been added yet.'}
+            </div>
           </div>
         ) : (
           <table className="df-table">

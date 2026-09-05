@@ -8,7 +8,7 @@ const findPlanById = (id) => SubscriptionPlan.findById(id);
 
 const createPlan = (data) => SubscriptionPlan.create(data);
 
-const findSubscriptions = (filter = {}) => Subscription.find(filter).sort({ created_at: -1 });
+const findSubscriptions = (filter = {}) => Subscription.find(filter).populate('plan_id').sort({ created_at: -1 });
 
 const findSubscriptionById = (id) => Subscription.findById(id).populate('plan_id');
 

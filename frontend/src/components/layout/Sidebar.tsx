@@ -27,11 +27,14 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '@/lib/useAuth';
 
 type NavItem = {
   label: string;
   href: string;
   icon: React.ReactNode;
+  /** Roles allowed to see this item. Omit to allow every internal role. */
+  roles?: string[];
 };
 
 type NavGroup = {
@@ -40,19 +43,21 @@ type NavGroup = {
   collapsible?: boolean;
 };
 
+// Mirrors the backend's requireRoles() guards on each route (see each
+// module's *.routes.js) so a role never sees a nav link that 403s on click.
 const navGroups: NavGroup[] = [
   {
     label: 'Workspace',
     items: [
       { label: 'Overview', href: '/', icon: <LayoutDashboard size={14} /> },
       { label: 'Quotations', href: '/sales/quotations', icon: <FileText size={14} /> },
-      { label: 'Approvals', href: '/sales/approvals', icon: <CheckSquare size={14} /> },
+      { label: 'Approvals', href: '/sales/approvals', icon: <CheckSquare size={14} />, roles: ['SALES_MANAGER', 'FINANCE', 'ADMIN'] },
     ],
   },
   {
     label: 'Sales',
     items: [
-      { label: 'Customers', href: '/admin/customers', icon: <Users size={14} /> },
+      { label: 'Customers', href: '/admin/customers', icon: <Users size={14} />, roles: ['SALES_REP', 'SALES_MANAGER', 'ADMIN'] },
       { label: 'Products', href: '/admin/products', icon: <Package size={14} /> },
     ],
   },
@@ -85,11 +90,11 @@ const navGroups: NavGroup[] = [
     label: 'System',
     collapsible: true,
     items: [
-      { label: 'Customer Tiers', href: '/admin/customer-tiers', icon: <Tag size={14} /> },
+      { label: 'Customer Tiers', href: '/admin/customer-tiers', icon: <Tag size={14} />, roles: ['SALES_MANAGER', 'ADMIN'] },
       { label: 'Categories', href: '/admin/categories', icon: <ListFilter size={14} /> },
       { label: 'Price Lists', href: '/admin/price-lists', icon: <BadgePercent size={14} /> },
-      { label: 'Discount Rules', href: '/admin/discount-rules', icon: <BadgePercent size={14} /> },
-      { label: 'Approval Rules', href: '/admin/approval-rules', icon: <FileCheck size={14} /> },
+      { label: 'Discount Rules', href: '/admin/discount-rules', icon: <BadgePercent size={14} />, roles: ['SALES_MANAGER', 'ADMIN'] },
+      { label: 'Approval Rules', href: '/admin/approval-rules', icon: <FileCheck size={14} />, roles: ['SALES_MANAGER', 'ADMIN'] },
       { label: 'Sub. Plans', href: '/admin/subscription-plans', icon: <RefreshCw size={14} /> },
       { label: 'System Status', href: '/admin/system-status', icon: <Database size={14} /> },
     ],
@@ -112,12 +117,15 @@ function SidebarLink({ item }: { item: NavItem }) {
   );
 }
 
-function SidebarGroup({ group }: { group: NavGroup }) {
+function SidebarGroup({ group, role }: { group: NavGroup; role: string | undefined }) {
   const pathname = usePathname();
-  const hasActive = group.items.some((item) =>
+  const items = group.items.filter((item) => !item.roles || (role && item.roles.includes(role)));
+  const hasActive = items.some((item) =>
     item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
   );
   const [open, setOpen] = useState(!group.collapsible || hasActive);
+
+  if (items.length === 0) return null;
 
   return (
     <div>
@@ -138,7 +146,7 @@ function SidebarGroup({ group }: { group: NavGroup }) {
       )}
       {open && (
         <nav>
-          {group.items.map((item) => (
+          {items.map((item) => (
             <SidebarLink key={item.href} item={item} />
           ))}
         </nav>
@@ -148,6 +156,8 @@ function SidebarGroup({ group }: { group: NavGroup }) {
 }
 
 export function Sidebar() {
+  const { user } = useAuth();
+
   return (
     <aside
       style={{
@@ -204,7 +214,7 @@ export function Sidebar() {
       {/* Navigation */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         {navGroups.map((group) => (
-          <SidebarGroup key={group.label} group={group} />
+          <SidebarGroup key={group.label} group={group} role={user?.role} />
         ))}
       </div>
     </aside>

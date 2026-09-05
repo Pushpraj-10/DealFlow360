@@ -13,8 +13,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user && pathname !== '/login') {
-      router.replace('/login');
+    if (loading) return;
+    if (!user) {
+      if (pathname !== '/login') router.replace('/login');
+      return;
+    }
+    if (user.role === 'CUSTOMER' && !pathname.startsWith('/portal')) {
+      router.replace('/portal');
+      return;
+    }
+    if (user.role !== 'CUSTOMER' && pathname.startsWith('/portal')) {
+      router.replace('/');
     }
   }, [loading, user, pathname, router]);
 
@@ -68,7 +77,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           {user && (
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{user.fullName}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{user.fullName}</span>
+              <button
+                onClick={logout}
+                className="btn btn-ghost btn-sm"
+                title="Sign out"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
           )}
         </header>
         <main style={{ maxWidth: 760, margin: '0 auto', padding: '32px 24px' }}>{children}</main>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../../core/middlewares/auth.middleware.js';
+import { authenticate, requireInternalUser } from '../../core/middlewares/auth.middleware.js';
 import {
     listInvoices,
     getInvoice,
@@ -12,7 +12,7 @@ import {
 // Mounted at the API root in app.js since this feature spans two resource
 // prefixes (/invoices, /credit-notes).
 const router = Router();
-router.use(authenticate);
+router.use(authenticate, requireInternalUser);
 
 router.get('/invoices', listInvoices);
 router.post('/invoices', generateInvoice);
