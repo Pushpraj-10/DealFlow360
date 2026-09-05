@@ -12,7 +12,7 @@ app.use(express.json({limit: '16kb'}));
 app.use(express.urlencoded({limit: '16kb', extended: true}));
 app.use(express.static('public'));
 
-import healthcheckRoutes from './routes/healthcheck.routes.js';
+import healthcheckRoutes from './modules/healthcheck/healthcheck.routes.js';
 
 app.use('/api/v1/healthcheck', healthcheckRoutes);
 
