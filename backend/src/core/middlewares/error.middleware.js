@@ -23,6 +23,22 @@ const errorHandler = (error, req, res, next) => {
         });
     }
 
+    // Mongoose's optimistic concurrency check (VersionError) fires when two
+    // requests read the same document and both try to save a change - e.g.
+    // two approvers deciding the same approval step at once. Without this,
+    // the raw internal error (with document ids and modified-path names)
+    // leaks straight to the client as an unstyled 500.
+    if (error?.name === 'VersionError') {
+        return res.status(409).json({
+            statusCode: 409,
+            data: null,
+            message: 'This record was just updated by someone else. Please refresh and try again.',
+            success: false,
+            code: ErrorCodes.CONFLICT,
+            errors: [],
+        });
+    }
+
     const statusCode = error.statusCode || 500;
 
     if (statusCode >= 500) {

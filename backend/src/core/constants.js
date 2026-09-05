@@ -20,6 +20,12 @@ export const USER_STATUSES = Object.freeze({
     DISABLED: 'DISABLED'
 });
 
+export const SIGNUP_REQUEST_STATUSES = Object.freeze({
+    PENDING: 'PENDING',
+    APPROVED: 'APPROVED',
+    REJECTED: 'REJECTED'
+});
+
 export const CUSTOMER_STATUSES = Object.freeze({
     ACTIVE: 'ACTIVE',
     INACTIVE: 'INACTIVE',
