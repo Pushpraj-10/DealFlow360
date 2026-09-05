@@ -1,44 +1,59 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, CheckCircle, Plus, AlertTriangle, ChevronRight, FileText } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle,
+  ChevronRight,
+  Plus,
+  Search,
+} from 'lucide-react';
+import {
+  formatStatus,
+  getActivityTime,
+  getCustomerName,
+  getRiskClass,
+  getStatusClass,
+  money,
+  normalizeQuotationCard,
+  timeAgo,
+  type QuotationListItem,
+} from '@/lib/salesRep';
 
 type Customer = { _id: string; name: string; company: string };
 type Product = { _id: string; name: string };
-// Shape returned by GET /quotations (list endpoint) - a lighter DTO than the
-// raw Mongoose document returned by the create/detail/submit endpoints below.
-type QuotationListItem = {
-  id: string;
-  quoteNumber: string;
-  status: string;
-  total: number;
-  riskSeverity: string;
-  customer: { id: string; name: string; company: string } | null;
-};
-// Shape returned by POST /quotations, GET /quotations/:id, POST .../submit -
-// a raw Mongoose document (real _id).
 type QuotationDoc = { _id: string };
-type QuotationLine = { _id: string; productId: { name: string } | string; quantity: number; unitPrice: number; discountPercent: number; lineTotal: number; is_violation: boolean };
+type QuotationLine = {
+  _id: string;
+  productId: { name: string } | string;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  lineTotal: number;
+  allowed_discount?: number;
+  allowedDiscountPercent?: number;
+  actual_discount?: number;
+  excess_discount?: number;
+  is_violation: boolean;
+  lineSubtotal?: number;
+  discountAmount?: number;
+  tax?: number;
+  taxPercentage?: number;
+  marginPercentage?: number;
+};
 
-function getStatusClass(status: string): string {
-  const s = status?.toLowerCase() ?? '';
-  if (s === 'draft') return 'status-draft';
-  if (s.includes('pending') || s.includes('approval')) return 'status-pending';
-  if (s === 'approved') return 'status-approved';
-  if (s === 'rejected') return 'status-rejected';
-  if (s === 'negotiating' || s === 'sent') return 'status-negotiating';
-  if (s === 'confirmed') return 'status-confirmed';
-  return 'status-draft';
-}
-
-function getRiskClass(risk: string): string {
-  const r = risk?.toLowerCase() ?? '';
-  if (r === 'high') return 'risk-high';
-  if (r === 'medium') return 'risk-medium';
-  if (r === 'low') return 'risk-low';
-  return 'risk-none';
-}
+type QuotationDetail = {
+  subtotal?: number;
+  totalDiscount?: number;
+  totalTax?: number;
+  grandTotal?: number;
+  riskScore?: number;
+  riskSeverity?: string;
+  approvalStatus?: string;
+  marginPercentage?: number;
+};
 
 export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
@@ -49,13 +64,16 @@ export default function QuotationsPage() {
   const [newCustomerId, setNewCustomerId] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lines, setLines] = useState<QuotationLine[]>([]);
+  const [quotationDetail, setQuotationDetail] = useState<QuotationDetail | null>(null);
   const [lineForm, setLineForm] = useState({ productId: '', quantity: '1', discountPercent: '0' });
   const [showNewForm, setShowNewForm] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const loadQuotations = () => {
     api
       .get<{ quotations: QuotationListItem[] }>('/quotations')
-      .then((d) => setQuotations(d.quotations))
+      .then((d) => setQuotations(d.quotations.map(normalizeQuotationCard)))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotations'));
   };
 
@@ -67,10 +85,24 @@ export default function QuotationsPage() {
 
   const loadLines = (id: string) => {
     api
-      .get<{ lines: QuotationLine[] }>(`/quotations/${id}`)
-      .then((d) => setLines(d.lines))
+      .get<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${id}`)
+      .then((d) => {
+        setLines(d.lines);
+        setQuotationDetail(d.quotation || null);
+      })
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotation lines'));
   };
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      const quoteId = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('quote');
+      if (!quoteId || selectedId === quoteId) return;
+      setSelectedId(quoteId);
+      setLines([]);
+      setQuotationDetail(null);
+      loadLines(quoteId);
+    });
+  }, [selectedId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +114,7 @@ export default function QuotationsPage() {
       loadQuotations();
       setSelectedId(data.quotation._id);
       setLines([]);
+      setQuotationDetail(null);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create quotation');
     }
@@ -92,12 +125,13 @@ export default function QuotationsPage() {
     if (!selectedId) return;
     setError(null);
     try {
-      const data = await api.post<{ lines: QuotationLine[] }>(`/quotations/${selectedId}/lines`, {
+      const data = await api.post<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${selectedId}/lines`, {
         productId: lineForm.productId,
         quantity: Number(lineForm.quantity),
         discountPercent: Number(lineForm.discountPercent),
       });
       setLines(data.lines);
+      setQuotationDetail(data.quotation || null);
       loadQuotations();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add line');
@@ -114,371 +148,263 @@ export default function QuotationsPage() {
       );
       setInfo(
         data.approval.approvalRequired
-          ? 'Submitted — routed for approval based on blended discount risk.'
-          : 'Submitted — no approval required, ready for the customer.'
+          ? 'Submitted - routed for approval based on blended discount risk.'
+          : 'Submitted - no approval required, ready for the customer.'
       );
       loadQuotations();
+      loadLines(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to submit quotation');
     }
   };
 
+  const filteredQuotations = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return quotations.filter((quotation) => {
+      const matchesStatus = !statusFilter || quotation.status === statusFilter;
+      const matchesSearch =
+        !term ||
+        [quotation.quoteNumber, getCustomerName(quotation.customer), quotation.status, quotation.riskSeverity, quotation.approvalStatus]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
+      return matchesStatus && matchesSearch;
+    });
+  }, [quotations, search, statusFilter]);
+
+  const statuses = Array.from(new Set(quotations.map((quotation) => quotation.status))).filter(Boolean);
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
+  
+  // Calculate summary from lines
+  const subtotal = lines.reduce((s, l) => s + (l.lineSubtotal || l.quantity * l.unitPrice), 0);
+  const totalDiscount = lines.reduce((s, l) => s + (l.discountAmount || 0), 0);
+  const totalTax = lines.reduce((s, l) => s + (l.tax || 0), 0);
   const grandTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   const hasViolations = lines.some((l) => l.is_violation);
+  const violationLines = lines.filter((l) => l.is_violation);
+
+  // Use quotation detail for margin and risk if available
+  const margin = quotationDetail?.marginPercentage;
+  const riskSeverity = quotationDetail?.riskSeverity || selectedQuotation?.riskSeverity;
+  const approvalStatus = quotationDetail?.approvalStatus || selectedQuotation?.approvalStatus;
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
-      {/* Left sidebar — quotation list */}
-      <div
-        style={{
-          width: 280,
-          flexShrink: 0,
-          background: 'var(--surface-01)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        {/* List header */}
-        <div
-          style={{
-            padding: '16px',
-            borderBottom: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Quotations</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-              {quotations.length} total
-            </div>
-          </div>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowNewForm(!showNewForm)}
-            title="New quotation"
-          >
-            <Plus size={13} />
-            New
-          </button>
+    <div className="sales-page">
+      <div className="sales-page-heading">
+        <div>
+          <p className="sales-eyebrow">Quotations</p>
+          <h1>Commercial workbench</h1>
+          <p>Create drafts, review terms, and submit quotes without leaving the sales flow.</p>
         </div>
+        <button className="btn btn-primary" onClick={() => setShowNewForm(!showNewForm)}>
+          <Plus size={14} />
+          New quotation
+        </button>
+      </div>
 
-        {/* New quotation form */}
-        {showNewForm && (
-          <form
-            onSubmit={handleCreate}
-            style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--surface-02)',
-            }}
-          >
-            <label className="df-label">Select customer</label>
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
+      {info && (
+        <div className="df-alert df-alert-success">
+          <CheckCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{info}</span>
+        </div>
+      )}
+
+      {showNewForm && (
+        <form onSubmit={handleCreate} className="sales-inline-form">
+          <label>
+            <span>Customer</span>
             <select
               value={newCustomerId}
               onChange={(e) => setNewCustomerId(e.target.value)}
               required
               className="df-select"
-              style={{ marginBottom: 8 }}
             >
-              <option value="">Choose customer…</option>
+              <option value="">Choose customer...</option>
               {customers.map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.company || c.name}
                 </option>
               ))}
             </select>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button type="submit" className="btn btn-primary btn-sm" style={{ flex: 1 }}>
-                Create Draft
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => setShowNewForm(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
+          </label>
+          <button type="submit" className="btn btn-primary">Create Draft</button>
+          <button type="button" className="btn btn-ghost" onClick={() => setShowNewForm(false)}>Cancel</button>
+        </form>
+      )}
 
-        {/* Quotation list */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {quotations.length === 0 && (
-            <div className="df-empty" style={{ padding: '32px 16px' }}>
-              <FileText size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
-              <div className="df-empty-title">No quotations yet</div>
-              <div className="df-empty-desc">Create your first draft to get started.</div>
-            </div>
-          )}
-          {quotations.map((q) => (
-            <button
-              key={q.id}
-              onClick={() => {
-                setSelectedId(q.id);
-                setLines([]);
-                loadLines(q.id);
-                setInfo(null);
-              }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '12px 16px',
-                borderBottom: '1px solid var(--border)',
-                background: selectedId === q.id ? 'var(--accent-light)' : 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'background 100ms',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-              }}
-              onMouseEnter={(e) => {
-                if (selectedId !== q.id)
-                  (e.currentTarget as HTMLElement).style.background = 'var(--surface-02)';
-              }}
-              onMouseLeave={(e) => {
-                if (selectedId !== q.id)
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: selectedId === q.id ? 'var(--accent)' : 'var(--text-primary)',
-                    fontFamily: 'monospace',
-                  }}
-                >
-                  {q.quoteNumber}
-                </span>
-                {q.riskSeverity && q.riskSeverity !== 'NONE' && (
-                  <span className={`risk-badge ${getRiskClass(q.riskSeverity)}`} style={{ fontSize: 9 }}>
-                    {q.riskSeverity}
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className={`status-badge ${getStatusClass(q.status)}`}>{q.status}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                  ${q.total?.toFixed?.(2) ?? '0.00'}
-                </span>
-              </div>
-            </button>
-          ))}
+      <section className="sales-table-section">
+        <div className="sales-table-toolbar">
+          <div className="sales-filter-control">
+            <Search size={15} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search quotes or customers" />
+          </div>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="df-select">
+            <option value="">All statuses</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>{formatStatus(status)}</option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      {/* Right — quotation builder */}
-      <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-        {error && (
-          <div className="df-alert df-alert-error" style={{ margin: '16px 24px 0', borderRadius: 'var(--radius)' }}>
-            <AlertCircle size={14} style={{ flexShrink: 0 }} />
-            <span>{error}</span>
-          </div>
-        )}
-        {info && (
-          <div className="df-alert df-alert-success" style={{ margin: '16px 24px 0', borderRadius: 'var(--radius)' }}>
-            <CheckCircle size={14} style={{ flexShrink: 0 }} />
-            <span>{info}</span>
-          </div>
-        )}
-
-        {!selectedId && (
-          <div className="df-empty" style={{ paddingTop: 80 }}>
-            <ChevronRight size={32} style={{ margin: '0 auto 12px', color: 'var(--text-tertiary)' }} />
-            <div className="df-empty-title">Select a quotation</div>
-            <div className="df-empty-desc">Choose from the list or create a new draft.</div>
-          </div>
-        )}
-
-        {selectedId && (
-          <div style={{ padding: '24px' }}>
-            {/* Quotation header */}
-            {selectedQuotation && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 20,
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <h1
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {selectedQuotation.quoteNumber}
-                    </h1>
-                    <span className={`status-badge ${getStatusClass(selectedQuotation.status)}`}>
-                      {selectedQuotation.status}
-                    </span>
-                    {selectedQuotation.riskSeverity && selectedQuotation.riskSeverity !== 'NONE' && (
-                      <span className={`risk-badge ${getRiskClass(selectedQuotation.riskSeverity)}`}>
-                        {selectedQuotation.riskSeverity} RISK
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
-                    {selectedQuotation.customer?.company || selectedQuotation.customer?.name || 'Customer'}
-                  </div>
-                </div>
-                <button onClick={handleSubmit} className="btn btn-primary">
-                  Submit for Approval
-                </button>
-              </div>
-            )}
-
-            {/* Lines table */}
-            <div className="df-card" style={{ marginBottom: 16 }}>
-              <div className="df-card-header">
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Quotation Lines</span>
-                {hasViolations && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      fontSize: 12,
-                      color: 'var(--amber)',
-                    }}
-                  >
-                    <AlertTriangle size={12} />
-                    Discount violations present
-                  </div>
-                )}
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="df-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th style={{ textAlign: 'center' }}>Qty</th>
-                      <th style={{ textAlign: 'right' }}>Unit Price</th>
-                      <th style={{ textAlign: 'center' }}>Discount %</th>
-                      <th style={{ textAlign: 'right' }}>Line Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l) => (
-                      <tr key={l._id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontWeight: 500 }}>
-                              {typeof l.productId === 'object' ? l.productId.name : l.productId}
-                            </span>
-                            {l.is_violation && (
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 3,
-                                  background: 'var(--amber-light)',
-                                  color: 'var(--amber)',
-                                  border: '1px solid var(--amber-muted)',
-                                  borderRadius: 4,
-                                  padding: '1px 6px',
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                <AlertTriangle size={9} />
-                                Discount violation
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="num" style={{ textAlign: 'center' }}>{l.quantity}</td>
-                        <td className="num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                          ${l.unitPrice.toFixed(2)}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            style={{
-                              color: l.is_violation ? 'var(--amber)' : 'var(--text-primary)',
-                              fontWeight: l.is_violation ? 600 : 400,
-                            }}
-                          >
-                            {l.discountPercent}%
-                          </span>
-                        </td>
-                        <td className="num" style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          ${l.lineTotal.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                    {lines.length === 0 && (
-                      <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-tertiary)', fontSize: 13 }}>
-                          No lines added yet — add a product below.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Grand total strip */}
-              {lines.length > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    padding: '12px 16px',
-                    borderTop: '1px solid var(--border)',
-                    background: 'var(--surface-02)',
+        <div className="sales-quote-table-wrap">
+          <table className="df-table sales-quote-table">
+            <thead>
+              <tr>
+                <th>Quote</th>
+                <th>Customer</th>
+                <th className="num">Amount</th>
+                <th>Status</th>
+                <th>Risk</th>
+                <th>Approval</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredQuotations.map((quotation) => (
+                <tr
+                  key={quotation.id}
+                  className={selectedId === quotation.id ? 'selected' : ''}
+                  onClick={() => {
+                    setSelectedId(quotation.id);
+                    setLines([]);
+                    setQuotationDetail(null);
+                    loadLines(quotation.id);
+                    setInfo(null);
                   }}
                 >
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-                      Grand Total
-                    </div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                      ${grandTotal.toFixed(2)}
-                    </div>
+                  <td>
+                    <span className="sales-quote-id">{quotation.quoteNumber}</span>
+                  </td>
+                  <td>{getCustomerName(quotation.customer)}</td>
+                  <td className="num">{money(quotation.total)}</td>
+                  <td><span className={`status-badge ${getStatusClass(quotation.status)}`}>{formatStatus(quotation.status)}</span></td>
+                  <td>
+                    <span className="sales-risk-inline">
+                      <span className={`risk-dot ${getRiskClass(quotation.riskSeverity)}`} />
+                      {quotation.riskSeverity || 'None'}
+                    </span>
+                  </td>
+                  <td>{formatStatus(quotation.approvalStatus || 'Not required')}</td>
+                  <td>{timeAgo(getActivityTime(quotation))}</td>
+                </tr>
+              ))}
+              {filteredQuotations.length === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="sales-empty-line">No quotations match the current filters.</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="quotation-builder-section">
+        {!selectedId ? (
+          <div className="sales-empty-state">
+            <ChevronRight size={30} />
+            <strong>Select a quotation</strong>
+            <span>Choose a quote from the table or create a new draft.</span>
+          </div>
+        ) : (
+          <div className="quotation-builder-layout">
+            {/* Main Content - 70% */}
+            <div className="quotation-main-content">
+              {/* Header */}
+              {selectedQuotation && (
+                <div className="quotation-detail-header">
+                  <div className="quotation-detail-title">
+                    <span className="quotation-number">{selectedQuotation.quoteNumber}</span>
+                    <h2 className="quotation-customer">{getCustomerName(selectedQuotation.customer)}</h2>
+                  </div>
+                  <div className="quotation-detail-meta">
+                    <span className={`status-badge ${getStatusClass(selectedQuotation.status)}`}>
+                      {formatStatus(selectedQuotation.status)}
+                    </span>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Add line form */}
-            <div className="df-card">
-              <div className="df-card-header">
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Add Line Item</span>
+              {/* Product Lines */}
+              <div className="quotation-lines-section">
+                <h3 className="quotation-section-title">Line items</h3>
+                
+                {lines.length === 0 ? (
+                  <div className="quotation-empty-lines">
+                    <p>No line items yet. Add products below to get started.</p>
+                  </div>
+                ) : (
+                  <div className="quotation-lines-list">
+                    {lines.map((line) => {
+                      const productName = typeof line.productId === 'object' ? line.productId.name : line.productId;
+                      const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
+                      const excessDiscount = line.excess_discount ?? 0;
+                      
+                      return (
+                        <div key={line._id} className={`quotation-line-item ${line.is_violation ? 'has-violation' : ''}`}>
+                          <div className="quotation-line-main">
+                            <div className="quotation-line-product">
+                              <span className="product-name">{productName}</span>
+                              <div className="quotation-line-details">
+                                <span>{line.quantity} × {money(line.unitPrice)}</span>
+                                {line.discountPercent > 0 && (
+                                  <span className="line-discount">Discount {line.discountPercent}%</span>
+                                )}
+                                {!line.is_violation && allowedDiscount > 0 && (
+                                  <span className="line-policy">Policy limit {allowedDiscount}%</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="quotation-line-amount">
+                              {money(line.lineTotal)}
+                            </div>
+                          </div>
+                          
+                          {line.is_violation && (
+                            <div className="quotation-line-violation">
+                              <AlertTriangle size={13} />
+                              <span>
+                                {line.discountPercent}% discount · policy limit {allowedDiscount}%
+                              </span>
+                              <span className="violation-excess">
+                                {Math.abs(excessDiscount).toFixed(1)}% above policy
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="df-card-body">
-                <form onSubmit={handleAddLine}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px auto', gap: 10, alignItems: 'flex-end' }}>
-                    <div>
-                      <label className="df-label">Product</label>
+
+              {/* Add Line Form */}
+              <div className="quotation-add-line-section">
+                <h3 className="quotation-section-title">Add line item</h3>
+                <form onSubmit={handleAddLine} className="quotation-add-line-form">
+                  <div className="form-grid">
+                    <label className="form-field">
+                      <span className="form-label">Product</span>
                       <select
                         value={lineForm.productId}
                         onChange={(e) => setLineForm({ ...lineForm, productId: e.target.value })}
                         required
                         className="df-select"
                       >
-                        <option value="">Select product…</option>
+                        <option value="">Select product...</option>
                         {products.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name}
-                          </option>
+                          <option key={p._id} value={p._id}>{p.name}</option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="df-label">Quantity</label>
+                    </label>
+                    <label className="form-field">
+                      <span className="form-label">Quantity</span>
                       <input
                         type="number"
                         value={lineForm.quantity}
@@ -486,9 +412,9 @@ export default function QuotationsPage() {
                         className="df-input"
                         min="1"
                       />
-                    </div>
-                    <div>
-                      <label className="df-label">Discount %</label>
+                    </label>
+                    <label className="form-field">
+                      <span className="form-label">Discount %</span>
                       <input
                         type="number"
                         value={lineForm.discountPercent}
@@ -497,20 +423,104 @@ export default function QuotationsPage() {
                         min="0"
                         max="100"
                       />
+                    </label>
+                  </div>
+                  <button type="submit" className="btn btn-secondary">
+                    <Plus size={14} />
+                    Add line
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Commercial Summary - 30% Sticky */}
+            <div className="quotation-summary-sidebar">
+              <div className="quotation-summary-sticky">
+                <h3 className="quotation-summary-title">Commercial summary</h3>
+                
+                <div className="quotation-summary-section">
+                  <div className="summary-line">
+                    <span>Subtotal</span>
+                    <span>{money(subtotal)}</span>
+                  </div>
+                  {totalDiscount > 0 && (
+                    <div className="summary-line">
+                      <span>Discount</span>
+                      <span className="negative">-{money(totalDiscount)}</span>
                     </div>
-                    <div>
-                      <button type="submit" className="btn btn-secondary" style={{ marginTop: 17 }}>
-                        <Plus size={13} />
-                        Add Line
-                      </button>
+                  )}
+                  {totalTax > 0 && (
+                    <div className="summary-line">
+                      <span>Tax</span>
+                      <span>{money(totalTax)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="summary-total">
+                  <span>Total</span>
+                  <strong>{money(grandTotal)}</strong>
+                </div>
+
+                {margin !== undefined && margin !== null && (
+                  <div className="quotation-summary-section">
+                    <div className="summary-line">
+                      <span>Margin</span>
+                      <span className="margin-value">{margin.toFixed(1)}%</span>
                     </div>
                   </div>
-                </form>
+                )}
+
+                {riskSeverity && riskSeverity !== 'NONE' && (
+                  <div className="quotation-summary-section">
+                    <div className="summary-risk-header">
+                      <span>Risk</span>
+                    </div>
+                    <div className={`summary-risk-badge risk-${riskSeverity.toLowerCase()}`}>
+                      {riskSeverity}
+                    </div>
+                    {violationLines.length > 0 && (
+                      <div className="summary-risk-details">
+                        {violationLines.map((line) => {
+                          const productName = typeof line.productId === 'object' ? line.productId.name : 'Product';
+                          const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
+                          const excessDiscount = line.excess_discount ?? 0;
+                          return (
+                            <div key={line._id} className="risk-item">
+                              <AlertTriangle size={12} />
+                              <span>{productName} discount exceeds policy by {Math.abs(excessDiscount).toFixed(1)}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {approvalStatus && approvalStatus !== 'NOT_REQUIRED' && (
+                  <div className="quotation-summary-section">
+                    <div className="summary-approval-header">
+                      <span>Approval</span>
+                    </div>
+                    <div className="summary-approval-status">
+                      {formatStatus(approvalStatus)}
+                    </div>
+                  </div>
+                )}
+
+                <div className="quotation-summary-actions">
+                  <button onClick={handleSubmit} className="btn btn-primary btn-full">
+                    Submit for Approval
+                  </button>
+                  <button className="btn btn-secondary btn-full" disabled>
+                    Save Draft
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

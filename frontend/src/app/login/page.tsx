@@ -34,7 +34,7 @@ export default function LoginPage() {
       <div
         style={{
           flex: '0 0 45%',
-          background: 'var(--sidebar-bg)',
+          background: '#171A21',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -58,7 +58,7 @@ export default function LoginPage() {
           >
             <span style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>D</span>
           </div>
-          <span style={{ color: '#FAFAFA', fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>
+          <span style={{ color: '#FAFAFA', fontSize: 16, fontWeight: 600, letterSpacing: 0 }}>
             DealFlow360
           </span>
         </div>
@@ -71,7 +71,7 @@ export default function LoginPage() {
               fontSize: 32,
               fontWeight: 700,
               lineHeight: 1.15,
-              letterSpacing: '-0.03em',
+              letterSpacing: 0,
               marginBottom: 16,
             }}
           >
@@ -79,7 +79,7 @@ export default function LoginPage() {
             <br />
             Sales Operations
           </h1>
-          <p style={{ color: 'var(--sidebar-muted)', fontSize: 14, lineHeight: 1.6, maxWidth: 340 }}>
+          <p style={{ color: '#A3AAB8', fontSize: 14, lineHeight: 1.6, maxWidth: 340 }}>
             From quotation to fulfillment — manage your entire sales pipeline with built-in discount governance, 
             risk evaluation, and approval workflows.
           </p>
@@ -101,13 +101,13 @@ export default function LoginPage() {
                     flexShrink: 0,
                   }}
                 />
-                <span style={{ color: 'var(--sidebar-text)', fontSize: 13 }}>{feat}</span>
+                <span style={{ color: '#D5DAE5', fontSize: 13 }}>{feat}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ color: 'var(--sidebar-muted)', fontSize: 12 }}>
+        <div style={{ color: '#A3AAB8', fontSize: 12 }}>
           © 2026 DealFlow360
         </div>
       </div>
@@ -130,7 +130,7 @@ export default function LoginPage() {
                 fontSize: 22,
                 fontWeight: 700,
                 color: 'var(--text-primary)',
-                letterSpacing: '-0.02em',
+                letterSpacing: 0,
                 marginBottom: 6,
               }}
             >

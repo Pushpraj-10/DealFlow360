@@ -1,2 +1,14 @@
 PLAN.md
 .playwright-mcp
+
+# Playwright test artifacts
+/playwright-report/
+/playwright/.cache/
+/test-results/
+/playwright-report/
+*.webm
+*.mp4
+
+# Environment files
+.env.local
+.env.*.local
