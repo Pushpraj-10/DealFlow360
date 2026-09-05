@@ -35,11 +35,12 @@ export default function CustomerTiersPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Customer Tiers</h1>
-          <p className="df-page-subtitle">Tier-based discount ceilings applied to customers in quotations</p>
+          <p className="admin-eyebrow">Sales</p>
+          <h1>Customer Tiers</h1>
+          <p>Tier-based discount ceilings applied to customers in quotations.</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={13} />
@@ -54,7 +55,7 @@ export default function CustomerTiersPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {tiers.length === 0 ? (
           <div className="df-empty">
             <Tag size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />

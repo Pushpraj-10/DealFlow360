@@ -48,11 +48,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Quote size={14} />
               My Quote
             </a>
-            <a className={pathname.includes('/quotation') ? 'active' : ''} href={pathname.startsWith('/portal/quotation') ? pathname : '/portal'}>
+            <a className={pathname.includes('/quotation') ? 'active' : ''} href={pathname.startsWith('/portal/quotation') ? `${pathname}#messages` : '/portal'}>
               <MessageSquare size={14} />
               Messages
             </a>
-            <a href="/portal">
+            <a href={pathname.startsWith('/portal/quotation') ? `${pathname}#profile` : '/portal'}>
               <UserRound size={14} />
               Profile
             </a>

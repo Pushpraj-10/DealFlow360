@@ -85,7 +85,7 @@ export default function QuotationsPage() {
 
   const loadLines = (id: string) => {
     api
-      .get<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${id}`)
+      .get<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${id}`)
       .then((d) => {
         setLines(d.lines);
         setQuotationDetail(d.quotation || null);
@@ -125,7 +125,7 @@ export default function QuotationsPage() {
     if (!selectedId) return;
     setError(null);
     try {
-      const data = await api.post<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${selectedId}/lines`, {
+      const data = await api.post<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${selectedId}/lines`, {
         productId: lineForm.productId,
         quantity: Number(lineForm.quantity),
         discountPercent: Number(lineForm.discountPercent),
@@ -179,7 +179,6 @@ export default function QuotationsPage() {
   const totalDiscount = lines.reduce((s, l) => s + (l.discountAmount || 0), 0);
   const totalTax = lines.reduce((s, l) => s + (l.tax || 0), 0);
   const grandTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const hasViolations = lines.some((l) => l.is_violation);
   const violationLines = lines.filter((l) => l.is_violation);
 
   // Use quotation detail for margin and risk if available
@@ -483,7 +482,6 @@ export default function QuotationsPage() {
                       <div className="summary-risk-details">
                         {violationLines.map((line) => {
                           const productName = typeof line.productId === 'object' ? line.productId.name : 'Product';
-                          const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
                           const excessDiscount = line.excess_discount ?? 0;
                           return (
                             <div key={line._id} className="risk-item">

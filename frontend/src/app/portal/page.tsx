@@ -40,12 +40,13 @@ export default function PortalHomePage() {
   }, []);
 
   return (
-    <div>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+    <div className="portal-page">
+      <div className="portal-home-header">
+        <p className="portal-eyebrow">My Quote</p>
+        <h1>
           Your Quotations
         </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+        <p>
           Quotations shared with you by your DealFlow360 sales rep.
         </p>
       </div>
@@ -58,63 +59,43 @@ export default function PortalHomePage() {
       )}
 
       {!quotations && !error && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="portal-skeleton">
           {[0, 1].map((i) => (
-            <div key={i} className="skeleton" style={{ height: 64, borderRadius: 'var(--radius-md)' }} />
+            <div key={i} className="skeleton" />
           ))}
         </div>
       )}
 
       {quotations && quotations.length === 0 && (
-        <div
-          style={{
-            background: '#fff',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '40px 24px',
-            textAlign: 'center',
-            color: 'var(--text-tertiary)',
-          }}
-        >
-          <FileText size={22} style={{ marginBottom: 10, opacity: 0.5 }} />
+        <div className="portal-empty">
+          <FileText size={22} />
           <p style={{ fontSize: 13 }}>No quotations have been shared with you yet.</p>
         </div>
       )}
 
       {quotations && quotations.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="portal-quote-list">
           {quotations.map((q) => (
             <button
               key={q.id}
               onClick={() => router.push(`/portal/quotation/${q.id}`)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#fff',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '14px 18px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                width: '100%',
-              }}
+              className="portal-quote-row"
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div>
                 <FileText size={16} color="var(--accent)" />
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                  <strong>
                     {q.quoteNumber}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  </strong>
+                  <small>
                     Updated {new Date(q.updatedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
-                  </div>
+                  </small>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div>
+                <strong>
                   {q.currencyCode} {q.grandTotal?.toFixed(2)}
-                </span>
+                </strong>
                 <span className={`status-badge ${getStatusClass(q.status)}`} style={{ fontSize: 11, padding: '3px 10px' }}>
                   {q.status.replace(/_/g, ' ')}
                 </span>

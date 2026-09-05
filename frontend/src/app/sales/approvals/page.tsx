@@ -1,31 +1,39 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, CheckCircle, XCircle, RotateCcw, CheckSquare } from 'lucide-react';
-
-type ApprovalRequest = {
-  _id: string;
-  quotationId: { _id: string; quoteNumber: string } | string;
-  riskLevel: string;
-  riskScore: number;
-  totalExcessDiscountExposure: number;
-  status: string;
-};
-
-function getRiskClass(risk: string): string {
-  const r = risk?.toLowerCase() ?? '';
-  if (r === 'high') return 'risk-high';
-  if (r === 'medium') return 'risk-medium';
-  if (r === 'low') return 'risk-low';
-  return 'risk-none';
-}
+import {
+  AlertCircle,
+  CheckCircle,
+  CheckSquare,
+  Eye,
+  RotateCcw,
+  Search,
+  XCircle,
+} from 'lucide-react';
+import {
+  approvalAmount,
+  approvalCustomer,
+  approvalQuoteNumber,
+  approvalRiskClass,
+  approvalStatusClass,
+  approvalUpdated,
+  isHighRisk,
+  normalizeApprovalStatus,
+  requestedByName,
+  type ApprovalRequest,
+} from '@/lib/manager';
+import { formatStatus } from '@/lib/salesRep';
 
 export default function ApprovalsPage() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [reasonById, setReasonById] = useState<Record<string, string>>({});
   const [actingOn, setActingOn] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
 
   const load = () => {
     api
@@ -40,9 +48,11 @@ export default function ApprovalsPage() {
 
   const decide = async (id: string, decision: 'approve' | 'reject' | 'return') => {
     setError(null);
+    setInfo(null);
     setActingOn(id);
     try {
       await api.post(`/approvals/requests/${id}/${decision}`, { reason: reasonById[id] || '' });
+      setInfo(`Approval ${decision === 'return' ? 'returned for revision' : `${decision}d`}.`);
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Decision failed');
@@ -51,17 +61,33 @@ export default function ApprovalsPage() {
     }
   };
 
+  const visibleRequests = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return requests.filter((request) => {
+      const matchesRisk = !riskFilter || request.riskLevel === riskFilter;
+      const matchesSearch =
+        !term ||
+        [
+          approvalCustomer(request),
+          approvalQuoteNumber(request),
+          request.riskLevel,
+          requestedByName(request),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
+      return matchesRisk && matchesSearch;
+    });
+  }, [requests, riskFilter, search]);
+
+  const riskOptions = Array.from(new Set(requests.map((request) => request.riskLevel))).filter(Boolean);
+
   return (
-    <div className="df-page">
-      {/* Page header */}
-      <div className="df-page-header">
+    <div className="manager-page">
+      <div className="manager-page-heading">
         <div>
-          <h1 className="df-page-title">Approval Queue</h1>
-          <p className="df-page-subtitle">
-            {requests.length > 0
-              ? `${requests.length} request${requests.length !== 1 ? 's' : ''} awaiting your decision`
-              : 'Visible to Sales Manager, Finance, and Admin roles'}
-          </p>
+          <p className="sales-eyebrow">Approvals</p>
+          <h1>Approval Queue</h1>
+          <p>{requests.length} active decision{requests.length === 1 ? '' : 's'} assigned to your role.</p>
         </div>
       </div>
 
@@ -71,148 +97,111 @@ export default function ApprovalsPage() {
           <span>{error}</span>
         </div>
       )}
-
-      {/* Empty state */}
-      {requests.length === 0 && !error && (
-        <div className="df-empty" style={{ paddingTop: 80 }}>
-          <CheckSquare size={36} className="df-empty-icon" />
-          <div className="df-empty-title">You're all caught up</div>
-          <div className="df-empty-desc">No pending approvals at this time.</div>
+      {info && (
+        <div className="df-alert df-alert-success">
+          <CheckCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{info}</span>
         </div>
       )}
 
-      {/* Approval queue */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {requests.map((req, idx) => {
-          const quoteNumber =
-            typeof req.quotationId === 'object' ? req.quotationId.quoteNumber : req.quotationId;
-          const isActing = actingOn === req._id;
+      <section className="manager-panel">
+        <div className="manager-queue-toolbar">
+          <div className="sales-filter-control">
+            <Search size={15} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search approvals" />
+          </div>
+          <select className="df-select" value={riskFilter} onChange={(event) => setRiskFilter(event.target.value)}>
+            <option value="">All risk levels</option>
+            {riskOptions.map((risk) => (
+              <option key={risk} value={risk}>{formatStatus(risk)}</option>
+            ))}
+          </select>
+        </div>
 
-          return (
-            <div
-              key={req._id}
-              style={{
-                background: 'var(--surface-01)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '20px 24px',
-                marginBottom: 10,
-                opacity: isActing ? 0.6 : 1,
-                transition: 'opacity 200ms',
-              }}
-            >
-              {/* Header row */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  marginBottom: 14,
-                  gap: 16,
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {quoteNumber}
-                    </span>
-                    <span className={`risk-badge ${getRiskClass(req.riskLevel)}`}>{req.riskLevel}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 20, fontSize: 12, color: 'var(--text-secondary)' }}>
-                    <span>
-                      Risk score:{' '}
-                      <strong style={{ color: 'var(--text-primary)' }}>{req.riskScore}</strong>
-                    </span>
-                    <span>
-                      Excess discount exposure:{' '}
-                      <strong
-                        style={{
-                          color:
-                            req.totalExcessDiscountExposure > 0 ? 'var(--amber)' : 'var(--text-primary)',
-                          fontVariantNumeric: 'tabular-nums',
-                        }}
-                      >
-                        ${req.totalExcessDiscountExposure?.toFixed?.(2) ?? '0.00'}
-                      </strong>
-                    </span>
-                  </div>
-                </div>
+        <div className="manager-table-wrap">
+          <table className="df-table manager-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Quote</th>
+                <th className="num">Amount</th>
+                <th>Risk</th>
+                <th>Status</th>
+                <th>Requested By</th>
+                <th>Waiting / Updated</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRequests.map((req) => {
+                const isActing = actingOn === req._id;
 
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--text-tertiary)',
-                    background: 'var(--surface-02)',
-                    padding: '2px 8px',
-                    borderRadius: 99,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  #{idx + 1}
-                </span>
-              </div>
-
-              {/* Reason input */}
-              <div style={{ marginBottom: 14 }}>
-                <label className="df-label">Reason / note</label>
-                <input
-                  value={reasonById[req._id] || ''}
-                  onChange={(e) =>
-                    setReasonById({ ...reasonById, [req._id]: e.target.value })
-                  }
-                  placeholder="Optional for approve — recommended for reject or return"
-                  className="df-input"
-                />
-              </div>
-
-              {/* Action buttons */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <button
-                  onClick={() => decide(req._id, 'approve')}
-                  disabled={isActing}
-                  className="btn btn-success"
-                  style={{ gap: 6 }}
-                >
-                  <CheckCircle size={13} />
-                  Approve
-                </button>
-                <button
-                  onClick={() => decide(req._id, 'return')}
-                  disabled={isActing}
-                  className="btn btn-warning"
-                  style={{ gap: 6 }}
-                >
-                  <RotateCcw size={13} />
-                  Return for Revision
-                </button>
-                <div style={{ flex: 1 }} />
-                <button
-                  onClick={() => decide(req._id, 'reject')}
-                  disabled={isActing}
-                  className="btn btn-danger"
-                  style={{ gap: 6 }}
-                >
-                  <XCircle size={13} />
-                  Reject
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                return (
+                  <tr key={req._id} className={isHighRisk(req) ? 'high-risk-row' : ''}>
+                    <td>{approvalCustomer(req)}</td>
+                    <td>
+                      <Link href={`/sales/approvals/${req._id}`} className="manager-quote-link">
+                        {approvalQuoteNumber(req)}
+                      </Link>
+                    </td>
+                    <td className="num">{approvalAmount(req)}</td>
+                    <td>
+                      <span className="sales-risk-inline">
+                        <span className={`risk-dot ${approvalRiskClass(req.riskLevel)}`} />
+                        {req.riskLevel}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${approvalStatusClass(req.status)}`}>
+                        {normalizeApprovalStatus(req.status)}
+                      </span>
+                    </td>
+                    <td>{requestedByName(req)}</td>
+                    <td>{approvalUpdated(req)}</td>
+                    <td>
+                      <div className="manager-decision-cell">
+                        <input
+                          value={reasonById[req._id] || ''}
+                          onChange={(e) => setReasonById({ ...reasonById, [req._id]: e.target.value })}
+                          placeholder="Reason"
+                          className="df-input"
+                        />
+                        <button onClick={() => decide(req._id, 'approve')} disabled={isActing} className="btn btn-success btn-sm">
+                          <CheckCircle size={13} />
+                          Approve
+                        </button>
+                        <button onClick={() => decide(req._id, 'return')} disabled={isActing} className="btn btn-warning btn-sm">
+                          <RotateCcw size={13} />
+                          Return
+                        </button>
+                        <button onClick={() => decide(req._id, 'reject')} disabled={isActing} className="btn btn-danger btn-sm">
+                          <XCircle size={13} />
+                          Reject
+                        </button>
+                        <Link href={`/sales/approvals/${req._id}`} className="btn btn-ghost btn-sm">
+                          <Eye size={13} />
+                          Detail
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {visibleRequests.length === 0 && (
+                <tr>
+                  <td colSpan={8}>
+                    <div className="sales-empty-state manager-empty">
+                      <CheckSquare size={30} />
+                      <strong>No approvals found</strong>
+                      <span>{requests.length === 0 ? 'No pending approvals are assigned to you.' : 'Try a different filter.'}</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

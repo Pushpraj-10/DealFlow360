@@ -42,11 +42,12 @@ export default function SubscriptionPlansPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Subscription Plans</h1>
-          <p className="df-page-subtitle">Configure recurring billing cycles and cancellation policies</p>
+          <p className="admin-eyebrow">Operations</p>
+          <h1>Subscription Plans</h1>
+          <p>Configure recurring billing cycles and cancellation policies.</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={13} />
@@ -61,7 +62,7 @@ export default function SubscriptionPlansPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {plans.length === 0 ? (
           <div className="df-empty">
             <RefreshCw size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />

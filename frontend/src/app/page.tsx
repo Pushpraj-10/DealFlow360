@@ -15,6 +15,9 @@ import {
   RefreshCw,
   RotateCcw,
   Activity,
+  Truck,
+  Receipt,
+  CreditCard,
 } from 'lucide-react';
 import {
   formatStatus,
@@ -30,6 +33,30 @@ import {
   type PipelineStage,
   type QuotationListItem,
 } from '@/lib/salesRep';
+import type { ApprovalRequest } from '@/lib/manager';
+import {
+  approvalAmount,
+  approvalCustomer,
+  approvalQuoteNumber,
+  approvalRiskClass,
+  approvalUpdated,
+  requestedByName,
+} from '@/lib/manager';
+import {
+  customerLabel,
+  formatDate,
+  formatStatus as formatOpsStatus,
+  fulfillmentCustomer,
+  isOpenFulfillment,
+  moneyCents as opsMoney,
+  operationsStatusClass,
+  planName,
+  timeAgo as opsTimeAgo,
+  type Backorder,
+  type Fulfillment,
+  type Invoice,
+  type Subscription,
+} from '@/lib/operations';
 
 type DashboardData = {
   quotationsByStatus: { _id: string; count: number }[];
@@ -257,8 +284,7 @@ function SalesRepOverview() {
 }
 
 function SalesManagerOverview() {
-  const { user } = useAuth();
-  const [approvals, setApprovals] = useState<any[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,7 +297,7 @@ function SalesManagerOverview() {
       setError(null);
       try {
         const [approvalsData, quotationsData] = await Promise.all([
-          api.get<{ approvalRequests: any[] }>('/approvals/pending'),
+          api.get<{ approvalRequests: ApprovalRequest[] }>('/approvals/pending'),
           api.get<{ quotations: QuotationListItem[] }>('/quotations'),
         ]);
 
@@ -296,15 +322,13 @@ function SalesManagerOverview() {
   const highRiskDeals = quotations.filter((q) => q.riskSeverity === 'HIGH').length;
   const returnedQuotes = quotations.filter((q) => q.status === 'RETURNED_FOR_REVISION').length;
 
-  const firstName = user?.fullName?.split(' ')[0] || 'there';
-
   return (
     <div className="sales-page">
       <section className="sales-hero-panel">
         <div>
           <p className="sales-eyebrow">Manager Workspace</p>
-          <h1>Good afternoon, {firstName}</h1>
-          <p>Decisions requiring your attention and team oversight</p>
+          <h1>Approvals requiring attention</h1>
+          <p>What decisions require you right now.</p>
         </div>
       </section>
 
@@ -335,8 +359,8 @@ function SalesManagerOverview() {
           </div>
           <div>
             <Clock3 size={16} />
-            <span>Active deals</span>
-            <strong>{loading ? '...' : quotations.filter((q) => isOpenDeal(q.status)).length}</strong>
+            <span>Average approval time</span>
+            <strong>Not tracked</strong>
           </div>
         </div>
       </section>
@@ -379,7 +403,7 @@ function SalesManagerOverview() {
             </table>
           </div>
         ) : approvals.length === 0 ? (
-          <div className="sales-empty-line">No approvals pending. You're all caught up!</div>
+          <div className="sales-empty-line">No approvals pending. You are all caught up.</div>
         ) : (
           <div className="df-table-wrap">
             <table className="df-table">
@@ -394,48 +418,276 @@ function SalesManagerOverview() {
                 </tr>
               </thead>
               <tbody>
-                {approvals.slice(0, 8).map((approval) => {
-                  const quoteNumber = typeof approval.quotationId === 'object' 
-                    ? approval.quotationId.quoteNumber 
-                    : approval.quotationId;
-                  const customerName = typeof approval.quotationId === 'object' && approval.quotationId.customerId
-                    ? getCustomerName(approval.quotationId.customerId)
-                    : 'Unknown';
-                  const amount = typeof approval.quotationId === 'object' 
-                    ? approval.quotationId.grandTotal 
-                    : 0;
-                  
-                  return (
-                    <tr 
-                      key={approval._id}
-                      onClick={() => window.location.href = `/sales/approvals/${approval._id}`}
-                      style={{ cursor: 'pointer' }}
-                      className={approval.riskLevel === 'HIGH' ? 'high-risk-row' : ''}
-                    >
-                      <td>{customerName}</td>
-                      <td>
-                        <span className="sales-quote-id">{quoteNumber}</span>
-                      </td>
-                      <td className="num">{money(amount)}</td>
-                      <td>
-                        <span className={`risk-badge ${getRiskClass(approval.riskLevel)}`}>
-                          {approval.riskLevel}
-                        </span>
-                      </td>
-                      <td>
-                        {typeof approval.requestedById === 'object' 
-                          ? approval.requestedById.fullName 
-                          : 'Unknown'}
-                      </td>
-                      <td>{timeAgo(approval.createdAt)}</td>
-                    </tr>
-                  );
-                })}
+                {approvals.slice(0, 8).map((approval) => (
+                  <tr key={approval._id} className={approval.riskLevel === 'HIGH' ? 'high-risk-row' : ''}>
+                    <td>{approvalCustomer(approval)}</td>
+                    <td>
+                      <Link href={`/sales/approvals/${approval._id}`} className="manager-quote-link">
+                        {approvalQuoteNumber(approval)}
+                      </Link>
+                    </td>
+                    <td className="num">{approvalAmount(approval)}</td>
+                    <td>
+                      <span className={`risk-badge ${approvalRiskClass(approval.riskLevel)}`}>
+                        {approval.riskLevel}
+                      </span>
+                    </td>
+                    <td>{requestedByName(approval)}</td>
+                    <td>{approvalUpdated(approval)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function FinanceOperationsOverview() {
+  const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
+  const [backorders, setBackorders] = useState<Backorder[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedAt] = useState(() => Date.now());
+
+  useEffect(() => {
+    let mounted = true;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [fulfillmentData, backorderData, subscriptionData, invoiceData, approvalData] = await Promise.all([
+          api.get<Fulfillment[]>('/fulfillments'),
+          api.get<Backorder[]>('/backorders'),
+          api.get<Subscription[]>('/subscriptions'),
+          api.get<Invoice[]>('/invoices'),
+          api.get<{ approvalRequests: ApprovalRequest[] }>('/approvals/pending'),
+        ]);
+
+        if (!mounted) return;
+        setFulfillments(fulfillmentData);
+        setBackorders(backorderData);
+        setSubscriptions(subscriptionData);
+        setInvoices(invoiceData);
+        setApprovals(approvalData.approvalRequests);
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof ApiClientError ? err.message : 'Failed to load operations workspace');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const openFulfillments = fulfillments.filter((item) => isOpenFulfillment(item.status));
+  const reviewSplits = fulfillments.filter((item) => {
+    const status = item.status?.toUpperCase() || '';
+    return status.includes('SPLIT') || status === 'PENDING' || status === 'PENDING_REVIEW';
+  });
+  const activeBackorders = backorders.filter((item) => !['RESOLVED', 'CANCELLED', 'FULFILLED'].includes(item.status?.toUpperCase()));
+  const unpaidInvoices = invoices.filter((item) => ['UNPAID', 'PARTIALLY_PAID'].includes(item.status?.toUpperCase()));
+  const upcomingBilling = subscriptions
+    .filter((item) => {
+      if (item.status !== 'ACTIVE' || !item.next_bill_date) return false;
+      const nextBill = new Date(item.next_bill_date).getTime();
+      const twoWeeks = loadedAt + 14 * 24 * 60 * 60 * 1000;
+      return !Number.isNaN(nextBill) && nextBill <= twoWeeks;
+    })
+    .sort((a, b) => new Date(a.next_bill_date).getTime() - new Date(b.next_bill_date).getTime());
+
+  const attentionItems = [
+    ...reviewSplits.map((item) => ({
+      id: `split-${item._id}`,
+      label: fulfillmentCustomer(item),
+      detail: 'Warehouse split requires review',
+      meta: `${formatOpsStatus(item.status)} - ${opsTimeAgo(item.updated_at || item.created_at)}`,
+      href: '/operations/fulfillment',
+      tone: 'blue',
+    })),
+    ...activeBackorders.map((item) => ({
+      id: `backorder-${item._id}`,
+      label: `Backorder ...${item._id.slice(-8)}`,
+      detail: `${item.qty} unit${item.qty === 1 ? '' : 's'} backordered`,
+      meta: `${formatOpsStatus(item.status)} - ${opsTimeAgo(item.updated_at || item.created_at)}`,
+      href: '/operations/fulfillment',
+      tone: 'amber',
+    })),
+    ...unpaidInvoices.map((item) => ({
+      id: `invoice-${item._id}`,
+      label: item.invoice_no,
+      detail: `${opsMoney(Math.max(0, item.total_cents - item.paid_amount_cents))} outstanding`,
+      meta: `Due ${formatDate(item.due_date)}`,
+      href: '/finance/invoices',
+      tone: item.status === 'UNPAID' ? 'red' : 'amber',
+    })),
+  ].slice(0, 7);
+
+  const recentFulfillment = [...fulfillments]
+    .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
+    .slice(0, 5);
+
+  return (
+    <div className="ops-page">
+      <section className="ops-hero-panel">
+        <div>
+          <p className="ops-eyebrow">Finance / Operations</p>
+          <h1>Operations today</h1>
+          <p>What operational work requires action.</p>
+        </div>
+        <Link href="/operations/fulfillment" className="btn btn-primary">
+          Open fulfillment
+          <ArrowRight size={14} />
+        </Link>
+      </section>
+
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <section className="ops-work-grid">
+        <div className="ops-primary-metric">
+          <span>Orders awaiting fulfillment</span>
+          <strong>{loading ? '...' : openFulfillments.length}</strong>
+          <small>{reviewSplits.length} warehouse split{reviewSplits.length === 1 ? '' : 's'} require review</small>
+        </div>
+        <div className="ops-secondary-metrics">
+          <div>
+            <Truck size={16} />
+            <span>Backorders</span>
+            <strong>{loading ? '...' : activeBackorders.length}</strong>
+          </div>
+          <div>
+            <Receipt size={16} />
+            <span>Unpaid invoices</span>
+            <strong>{loading ? '...' : unpaidInvoices.length}</strong>
+          </div>
+          <div>
+            <RefreshCw size={16} />
+            <span>Upcoming billing</span>
+            <strong>{loading ? '...' : upcomingBilling.length}</strong>
+          </div>
+          <div>
+            <CreditCard size={16} />
+            <span>Approvals</span>
+            <strong>{loading ? '...' : approvals.length}</strong>
+          </div>
+        </div>
+      </section>
+
+      <div className="ops-dashboard-grid">
+        <section className="ops-panel">
+          <div className="ops-panel-header">
+            <div>
+              <p className="ops-eyebrow">Requires Attention</p>
+              <h2>Operational queue</h2>
+            </div>
+          </div>
+          {loading ? (
+            <div className="ops-list">
+              {[1, 2, 3].map((item) => (
+                <div className="ops-list-item" key={item}>
+                  <div className="skeleton" style={{ width: 150, height: 14 }} />
+                  <div className="skeleton" style={{ width: 220, height: 12 }} />
+                </div>
+              ))}
+            </div>
+          ) : attentionItems.length === 0 ? (
+            <div className="ops-empty-line">No operational exceptions need attention.</div>
+          ) : (
+            <div className="ops-list">
+              {attentionItems.map((item) => (
+                <Link href={item.href} key={item.id} className="ops-list-item">
+                  <span className={`ops-dot ${item.tone}`} />
+                  <span>
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                  <em>{item.meta}</em>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="ops-panel">
+          <div className="ops-panel-header">
+            <div>
+              <p className="ops-eyebrow">Recent Fulfillment</p>
+              <h2>Latest order movement</h2>
+            </div>
+            <Link href="/operations/fulfillment">View all</Link>
+          </div>
+          {loading ? (
+            <div className="ops-compact-table">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="ops-compact-row">
+                  <div className="skeleton" style={{ width: 110, height: 13 }} />
+                  <div className="skeleton" style={{ width: 84, height: 13 }} />
+                </div>
+              ))}
+            </div>
+          ) : recentFulfillment.length === 0 ? (
+            <div className="ops-empty-line">No fulfillment records yet.</div>
+          ) : (
+            <div className="ops-compact-table">
+              {recentFulfillment.map((item) => (
+                <Link href="/operations/fulfillment" key={item._id} className="ops-compact-row">
+                  <span>
+                    <strong>...{item._id.slice(-8)}</strong>
+                    <small>{fulfillmentCustomer(item)}</small>
+                  </span>
+                  <em className={`status-badge ${operationsStatusClass(item.status)}`}>{formatOpsStatus(item.status)}</em>
+                  <small>{opsTimeAgo(item.updated_at || item.created_at)}</small>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="ops-panel ops-panel-wide">
+          <div className="ops-panel-header">
+            <div>
+              <p className="ops-eyebrow">Upcoming Billing</p>
+              <h2>Next subscription charges</h2>
+            </div>
+            <Link href="/finance/subscriptions">Open subscriptions</Link>
+          </div>
+          {loading ? (
+            <div className="ops-billing-strip">
+              {[1, 2, 3].map((item) => (
+                <div className="ops-billing-item skeleton" key={item} />
+              ))}
+            </div>
+          ) : upcomingBilling.length === 0 ? (
+            <div className="ops-empty-line">No active subscriptions bill in the next 14 days.</div>
+          ) : (
+            <div className="ops-billing-strip">
+              {upcomingBilling.slice(0, 5).map((item) => (
+                <Link href="/finance/subscriptions" key={item._id} className="ops-billing-item">
+                  <strong>{customerLabel(item.customer_id)}</strong>
+                  <span>{planName(item)}</span>
+                  <em>{opsMoney(item.recurring_unit_price_cents * item.qty)}</em>
+                  <small>{formatDate(item.next_bill_date)}</small>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -655,12 +907,14 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const isSalesRep = user?.role === 'SALES_REP';
   const isSalesManager = user?.role === 'SALES_MANAGER';
+  const isFinance = user?.role === 'FINANCE';
 
   const page = useMemo(() => {
     if (isSalesRep) return <SalesRepOverview />;
     if (isSalesManager) return <SalesManagerOverview />;
+    if (isFinance) return <FinanceOperationsOverview />;
     return <DashboardPageFallback />;
-  }, [isSalesRep, isSalesManager]);
+  }, [isSalesRep, isSalesManager, isFinance]);
 
   return page;
 }

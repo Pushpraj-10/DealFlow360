@@ -37,6 +37,7 @@ const navByRole: Record<string, NavItem[]> = {
   SALES_MANAGER: [
     { label: 'Overview', href: '/', icon: <LayoutDashboard size={15} /> },
     { label: 'Approvals', href: '/sales/approvals', icon: <CheckSquare size={15} /> },
+    { label: 'Team Deals', href: '/sales/team-deals', icon: <Columns3 size={15} /> },
     { label: 'Deal Health', href: '/management/deal-health', icon: <Activity size={15} /> },
   ],
   FINANCE: [

@@ -1,33 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CalendarClock, RefreshCw, X } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, RefreshCw, X } from 'lucide-react';
-
-type Subscription = {
-  _id: string;
-  customer_id: string;
-  plan_id: { _id: string; name: string; cycle: string } | string;
-  status: string;
-  qty: number;
-  recurring_unit_price_cents: number;
-  next_bill_date: string;
-};
-
-function money(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function getStatusClass(status: string) {
-  if (status === 'ACTIVE') return 'status-active';
-  if (status === 'CANCELLED') return 'status-cancelled';
-  return 'status-draft';
-}
+import {
+  customerLabel,
+  formatDate,
+  formatStatus,
+  moneyCents,
+  operationsStatusClass,
+  planInterval,
+  planName,
+  type Subscription,
+} from '@/lib/operations';
 
 export default function SubscriptionsPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Subscription | null>(null);
+  const [modifyTarget, setModifyTarget] = useState<Subscription | null>(null);
   const [newQty, setNewQty] = useState(1);
   const [prorationPreview, setProrationPreview] = useState<number | null>(null);
 
@@ -41,23 +32,24 @@ export default function SubscriptionsPage() {
 
   const openModify = (sub: Subscription) => {
     setSelected(sub);
+    setModifyTarget(sub);
     setNewQty(sub.qty);
     setProrationPreview(null);
   };
 
   useEffect(() => {
-    if (!selected) return;
+    if (!modifyTarget) return;
     api
-      .get<{ proratedDeltaCents: number }>(`/billing/prorate?subscriptionId=${selected._id}&newQty=${newQty}`)
+      .get<{ proratedDeltaCents: number }>(`/billing/prorate?subscriptionId=${modifyTarget._id}&newQty=${newQty}`)
       .then((d) => setProrationPreview(d.proratedDeltaCents))
       .catch(() => setProrationPreview(null));
-  }, [selected, newQty]);
+  }, [modifyTarget, newQty]);
 
   const confirmModify = async () => {
-    if (!selected) return;
+    if (!modifyTarget) return;
     try {
-      await api.post(`/subscriptions/${selected._id}/modify`, { newQty });
-      setSelected(null);
+      await api.post(`/subscriptions/${modifyTarget._id}/modify`, { newQty });
+      setModifyTarget(null);
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Modify failed');
@@ -73,111 +65,188 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const active = subs.filter((s) => s.status === 'ACTIVE').length;
+  const active = subs.filter((sub) => sub.status === 'ACTIVE').length;
   const totalMRR = subs
-    .filter((s) => s.status === 'ACTIVE')
-    .reduce((sum, s) => sum + s.recurring_unit_price_cents * s.qty, 0);
+    .filter((sub) => sub.status === 'ACTIVE')
+    .reduce((sum, sub) => sum + sub.recurring_unit_price_cents * sub.qty, 0);
+  const nextBill = useMemo(
+    () =>
+      [...subs]
+        .filter((sub) => sub.status === 'ACTIVE' && sub.next_bill_date)
+        .sort((a, b) => new Date(a.next_bill_date).getTime() - new Date(b.next_bill_date).getTime())[0],
+    [subs]
+  );
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="ops-page">
+      <div className="ops-page-heading">
         <div>
-          <h1 className="df-page-title">Subscriptions</h1>
-          <p className="df-page-subtitle">{subs.length} subscription{subs.length !== 1 ? 's' : ''} total</p>
+          <p className="ops-eyebrow">Finance</p>
+          <h1>Subscriptions</h1>
+          <p>Recurring commercial data, billing dates, and plan changes.</p>
         </div>
       </div>
 
       {error && (
         <div className="df-alert df-alert-error">
-          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <AlertCircle size={14} />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Metric strip */}
-      {subs.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-          <div className="df-metric">
-            <div className="df-metric-label">Active</div>
-            <div className="df-metric-value text-num" style={{ color: 'var(--green)' }}>{active}</div>
-            <div className="df-metric-sub">recurring subscriptions</div>
-          </div>
-          <div className="df-metric">
-            <div className="df-metric-label">Monthly Recurring Revenue</div>
-            <div className="df-metric-value text-num">{money(totalMRR)}</div>
-            <div className="df-metric-sub">from active plans</div>
-          </div>
-          <div className="df-metric">
-            <div className="df-metric-label">Churned</div>
-            <div className="df-metric-value text-num">{subs.length - active}</div>
-            <div className="df-metric-sub">cancelled or inactive</div>
-          </div>
+      <section className="ops-secondary-strip">
+        <div className="ops-strip-primary">
+          <span>Active recurring revenue</span>
+          <strong>{moneyCents(totalMRR)}</strong>
+          <small>{active} active subscription{active === 1 ? '' : 's'}</small>
         </div>
-      )}
+        <div>
+          <RefreshCw size={16} />
+          <span>Total subscriptions</span>
+          <strong>{subs.length}</strong>
+        </div>
+        <div>
+          <CalendarClock size={16} />
+          <span>Next bill</span>
+          <strong>{nextBill ? formatDate(nextBill.next_bill_date) : 'None'}</strong>
+        </div>
+      </section>
 
-      <div className="df-card">
-        {subs.length === 0 ? (
-          <div className="df-empty">
-            <RefreshCw size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
-            <div className="df-empty-title">No subscriptions</div>
-            <div className="df-empty-desc">Subscriptions are created when recurring quotations are confirmed.</div>
+      <div className="ops-master-detail">
+        <section className="ops-panel">
+          <div className="ops-panel-header">
+            <div>
+              <p className="ops-eyebrow">Recurring</p>
+              <h2>Subscription list</h2>
+            </div>
           </div>
-        ) : (
-          <table className="df-table">
-            <thead>
-              <tr>
-                <th>Plan</th>
-                <th style={{ textAlign: 'right' }}>Qty</th>
-                <th style={{ textAlign: 'right' }}>Unit Price</th>
-                <th>Next Billing</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {subs.map((s) => (
-                <tr key={s._id}>
-                  <td style={{ fontWeight: 500 }}>
-                    {typeof s.plan_id === 'object' ? s.plan_id.name : s.plan_id}
-                    {typeof s.plan_id === 'object' && (
-                      <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
-                        · {s.plan_id.cycle}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.qty}</td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(s.recurring_unit_price_cents)}</td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                    {new Date(s.next_bill_date).toLocaleDateString()}
-                  </td>
-                  <td>
-                    <span className={`status-badge ${getStatusClass(s.status)}`}>{s.status}</span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    {s.status === 'ACTIVE' && (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button onClick={() => openModify(s)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
-                          Modify
-                        </button>
-                        <button onClick={() => cancelSub(s._id)} className="btn btn-danger btn-sm">
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+
+          {subs.length === 0 ? (
+            <div className="df-empty">
+              <RefreshCw size={28} />
+              <div className="df-empty-title">No subscriptions</div>
+              <div className="df-empty-desc">Subscriptions are created when recurring quotations are confirmed.</div>
+            </div>
+          ) : (
+            <div className="ops-table-wrap">
+              <table className="df-table ops-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Billing interval</th>
+                    <th className="num">Amount</th>
+                    <th>Next bill</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subs.map((sub) => (
+                    <tr key={sub._id} className={selected?._id === sub._id ? 'selected' : ''} onClick={() => setSelected(sub)}>
+                      <td>{customerLabel(sub.customer_id)}</td>
+                      <td>
+                        <strong>{planName(sub)}</strong>
+                        <small>Qty {sub.qty}</small>
+                      </td>
+                      <td>{planInterval(sub)}</td>
+                      <td className="num">{moneyCents(sub.recurring_unit_price_cents * sub.qty)}</td>
+                      <td>{formatDate(sub.next_bill_date)}</td>
+                      <td>
+                        <span className={`status-badge ${operationsStatusClass(sub.status)}`}>{formatStatus(sub.status)}</span>
+                      </td>
+                      <td className="num">
+                        {sub.status === 'ACTIVE' && (
+                          <div className="ops-row-actions">
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openModify(sub);
+                              }}
+                              className="btn btn-ghost btn-sm"
+                            >
+                              Modify
+                            </button>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                cancelSub(sub._id);
+                              }}
+                              className="btn btn-danger btn-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <aside className="ops-panel ops-side-panel">
+          {!selected ? (
+            <div className="df-empty">
+              <CalendarClock size={30} />
+              <div className="df-empty-title">Select a subscription</div>
+              <div className="df-empty-desc">Plan summary, billing timeline, and proration details will appear here.</div>
+            </div>
+          ) : (
+            <>
+              <div className="ops-record-header">
+                <span className={`status-badge ${operationsStatusClass(selected.status)}`}>{formatStatus(selected.status)}</span>
+                <h2>{planName(selected)}</h2>
+                <p>{customerLabel(selected.customer_id)}</p>
+              </div>
+              <dl className="ops-definition-list">
+                <div>
+                  <dt>Billing interval</dt>
+                  <dd>{planInterval(selected)}</dd>
+                </div>
+                <div>
+                  <dt>Quantity</dt>
+                  <dd>{selected.qty}</dd>
+                </div>
+                <div>
+                  <dt>Recurring amount</dt>
+                  <dd>{moneyCents(selected.recurring_unit_price_cents * selected.qty)}</dd>
+                </div>
+                <div>
+                  <dt>Next bill</dt>
+                  <dd>{formatDate(selected.next_bill_date)}</dd>
+                </div>
+                <div>
+                  <dt>Current period</dt>
+                  <dd>{selected.current_period_start || selected.current_period_end ? `${formatDate(selected.current_period_start)} - ${formatDate(selected.current_period_end)}` : 'Not returned'}</dd>
+                </div>
+              </dl>
+              {selected.status === 'ACTIVE' && (
+                <div className="ops-side-actions">
+                  <button onClick={() => openModify(selected)} className="btn btn-primary">
+                    Modify subscription
+                  </button>
+                  <button onClick={() => cancelSub(selected._id)} className="btn btn-danger">
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </aside>
       </div>
 
-      {selected && (
-        <div className="df-modal-overlay" onClick={() => setSelected(null)}>
+      {modifyTarget && (
+        <div className="df-modal-overlay" onClick={() => setModifyTarget(null)}>
           <div className="df-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="df-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <h2 className="df-modal-title">Modify Subscription</h2>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>
+            <div className="df-modal-header ops-modal-header">
+              <div>
+                <h2 className="df-modal-title">Modify subscription</h2>
+                <p>{planName(modifyTarget)} for {customerLabel(modifyTarget.customer_id)}</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setModifyTarget(null)}>
                 <X size={14} />
               </button>
             </div>
@@ -186,37 +255,14 @@ export default function SubscriptionsPage() {
                 <label className="df-label">New quantity</label>
                 <input type="number" min={1} value={newQty} onChange={(e) => setNewQty(parseInt(e.target.value) || 1)} className="df-input" />
               </div>
-              <div
-                style={{
-                  background: 'var(--surface-02)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px 14px',
-                  marginBottom: 0,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    Prorated {(prorationPreview ?? 0) >= 0 ? 'charge' : 'credit'}:
-                  </span>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      fontVariantNumeric: 'tabular-nums',
-                      color: (prorationPreview ?? 0) >= 0 ? 'var(--amber)' : 'var(--green)',
-                    }}
-                  >
-                    {prorationPreview !== null ? money(Math.abs(prorationPreview)) : '—'}
-                  </span>
-                </div>
-                <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                  Applied immediately per the plan&apos;s proration policy.
-                </p>
+              <div className="ops-proration-box">
+                <span>Prorated {(prorationPreview ?? 0) >= 0 ? 'charge' : 'credit'}</span>
+                <strong>{prorationPreview !== null ? moneyCents(Math.abs(prorationPreview)) : 'Not returned'}</strong>
               </div>
             </div>
             <div className="df-modal-footer">
-              <button onClick={() => setSelected(null)} className="btn btn-ghost">Close</button>
-              <button onClick={confirmModify} className="btn btn-primary">Confirm Changes</button>
+              <button onClick={() => setModifyTarget(null)} className="btn btn-ghost">Close</button>
+              <button onClick={confirmModify} className="btn btn-primary">Confirm changes</button>
             </div>
           </div>
         </div>
