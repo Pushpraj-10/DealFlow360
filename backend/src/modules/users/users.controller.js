@@ -1,25 +1,66 @@
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
-import {SIGNUP_REQUEST_STATUSES, USER_STATUSES} from '../../core/constants.js';
+import {SIGNUP_REQUEST_STATUSES, USER_ROLES, USER_STATUSES} from '../../core/constants.js';
 import {User} from './user.model.js';
 import {UserSignupRequest} from './userSignupRequest.model.js';
 import {sendSignupApprovedEmail, sendSignupRejectedEmail} from '../_shared/mail/mail.service.js';
 
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
+
+// Clamps and defaults page/limit query params shared by both paginated
+// endpoints below, mirroring deal-health.service.js's resolvePagination.
+const resolvePagination = (page, limit) => {
+    const pageNum = Math.max(1, Math.trunc(Number(page)) || 1);
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(Number(limit)) || DEFAULT_PAGE_SIZE));
+    return {page: pageNum, limit: pageSize};
+};
+
+const buildSearchFilter = (search) => {
+    if (!search || !search.trim()) {
+        return {};
+    }
+
+    const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    return {$or: [{fullName: regex}, {email: regex}]};
+};
+
 const listUsers = asyncHandler(async (req, res) => {
-    const users = await User.find().sort({createdAt: -1});
+    const {role, search, page, limit} = req.query;
+    const filter = buildSearchFilter(search);
+
+    if (role) {
+        if (!Object.values(USER_ROLES).includes(role)) {
+            throw new ApiError(400, 'Invalid role filter');
+        }
+        filter.role = role;
+    }
+
+    const {page: pageNum, limit: pageSize} = resolvePagination(page, limit);
+    const [users, total] = await Promise.all([
+        User.find(filter)
+        .sort({createdAt: -1})
+        .skip((pageNum - 1) * pageSize)
+        .limit(pageSize),
+        User.countDocuments(filter)
+    ]);
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {users}, 'Users fetched successfully'));
+    .json(new ApiResponse(200, {
+        users,
+        pagination: {page: pageNum, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize))}
+    }, 'Users fetched successfully'));
 });
 
 // Admin-only: shows every request regardless of status by default so the
 // approve/reject history stays visible, with an optional ?status= filter for
-// the pending queue view.
+// the pending queue view, plus ?search= and ?page=/?limit= pagination.
 const listSignupRequests = asyncHandler(async (req, res) => {
-    const {status} = req.query;
-    const filter = {};
+    const {status, search, page, limit} = req.query;
+    const filter = buildSearchFilter(search);
 
     if (status) {
         if (!Object.values(SIGNUP_REQUEST_STATUSES).includes(status)) {
@@ -28,13 +69,22 @@ const listSignupRequests = asyncHandler(async (req, res) => {
         filter.status = status;
     }
 
-    const requests = await UserSignupRequest.find(filter)
-    .populate('reviewedById', 'fullName email')
-    .sort({createdAt: -1});
+    const {page: pageNum, limit: pageSize} = resolvePagination(page, limit);
+    const [requests, total] = await Promise.all([
+        UserSignupRequest.find(filter)
+        .populate('reviewedById', 'fullName email')
+        .sort({createdAt: -1})
+        .skip((pageNum - 1) * pageSize)
+        .limit(pageSize),
+        UserSignupRequest.countDocuments(filter)
+    ]);
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {requests: requests.map((r) => r.toSafeObject())}, 'Signup requests fetched successfully'));
+    .json(new ApiResponse(200, {
+        requests: requests.map((r) => r.toSafeObject()),
+        pagination: {page: pageNum, limit: pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize))}
+    }, 'Signup requests fetched successfully'));
 });
 
 const DIRECTORY_STATUS_VALUES = ['ACTIVE', 'DISABLED', 'APPROVED', 'REJECTED'];
