@@ -31,7 +31,7 @@ export default function ReportsPage() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'sales-report.csv';
+        a.download = 'sales-report.xlsx';
         a.click();
       });
   };
@@ -41,7 +41,7 @@ export default function ReportsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Reports & Analytics</h1>
         <button onClick={handleExport} className="px-4 py-2 bg-gray-800 text-white rounded shadow text-sm">
-          Export CSV
+          Export XLSX
         </button>
       </div>
 

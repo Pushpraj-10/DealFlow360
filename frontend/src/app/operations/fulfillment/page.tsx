@@ -10,10 +10,12 @@ type Allocation = {
   allocated_qty: number;
   shipped_qty: number;
   status: string;
-  quote_line_id?: { productId?: { name?: string }; variantId?: { sku?: string } };
+  quote_line_id?: { _id: string; productId?: { name?: string }; variantId?: { sku?: string } };
 };
 type Backorder = { _id: string; qty: number; status: string };
 type Detail = { fulfillment: Fulfillment; allocations: Allocation[]; backorders: Backorder[] };
+type Warehouse = { _id: string; name: string };
+type OverrideRow = { quote_line_id: string; warehouse_id: string; qty: string };
 
 export default function FulfillmentPage() {
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
@@ -22,6 +24,10 @@ export default function FulfillmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [newQuotationId, setNewQuotationId] = useState('');
   const [shipQty, setShipQty] = useState<Record<string, string>>({});
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [showOverride, setShowOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideRows, setOverrideRows] = useState<OverrideRow[]>([]);
 
   const loadList = () => {
     api
@@ -29,6 +35,10 @@ export default function FulfillmentPage() {
       .then(setFulfillments)
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load fulfillments'));
   };
+
+  useEffect(() => {
+    api.get<Warehouse[]>('/warehouses').then(setWarehouses).catch(() => {});
+  }, []);
 
   const loadDetail = (id: string) => {
     api
@@ -64,6 +74,41 @@ export default function FulfillmentPage() {
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Action failed');
     }
+  };
+
+  const openOverride = () => {
+    if (!detail) return;
+    const seen = new Set<string>();
+    const rows: OverrideRow[] = [];
+    for (const a of detail.allocations) {
+      const lineId = a.quote_line_id?._id;
+      if (!lineId) continue;
+      rows.push({ quote_line_id: lineId, warehouse_id: a.warehouse_id, qty: String(a.allocated_qty) });
+      seen.add(lineId);
+    }
+    setOverrideRows(rows.length > 0 ? rows : [{ quote_line_id: '', warehouse_id: '', qty: '' }]);
+    setOverrideReason('');
+    setShowOverride(true);
+  };
+
+  const lineLabel = (lineId: string) => {
+    const alloc = detail?.allocations.find((a) => a.quote_line_id?._id === lineId);
+    return alloc?.quote_line_id?.productId?.name || alloc?.quote_line_id?.variantId?.sku || lineId.slice(-6);
+  };
+
+  const submitOverride = async () => {
+    if (!overrideReason.trim()) {
+      setError('A reason is required for a manual override');
+      return;
+    }
+    const allocations = overrideRows
+      .filter((r) => r.quote_line_id && r.warehouse_id && r.qty)
+      .map((r) => ({ quote_line_id: r.quote_line_id, warehouse_id: r.warehouse_id, qty: Number(r.qty) }));
+
+    await runAction(() =>
+      api.post(`/fulfillments/${selectedId}/override`, { allocations, reason: overrideReason })
+    );
+    setShowOverride(false);
   };
 
   return (
@@ -120,6 +165,9 @@ export default function FulfillmentPage() {
                     className="px-3 py-1 bg-green-600 text-white rounded text-sm"
                   >
                     Accept Suggested Split
+                  </button>
+                  <button onClick={openOverride} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
+                    Manual Override
                   </button>
                 </div>
               </div>
@@ -188,6 +236,86 @@ export default function FulfillmentPage() {
           )}
         </div>
       </div>
+
+      {showOverride && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-[36rem]">
+            <h2 className="text-xl font-bold mb-1">Manual Warehouse Override</h2>
+            <p className="text-xs text-gray-500 mb-4">
+              Replaces the current split. Excess beyond a warehouse&apos;s available stock is rejected for that row;
+              any shortfall becomes a backorder.
+            </p>
+
+            <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+              {overrideRows.map((row, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <span className="text-xs text-gray-500 w-24 truncate">
+                    {row.quote_line_id ? lineLabel(row.quote_line_id) : 'line'}
+                  </span>
+                  <select
+                    value={row.warehouse_id}
+                    onChange={(e) => {
+                      const next = [...overrideRows];
+                      next[idx] = { ...row, warehouse_id: e.target.value };
+                      setOverrideRows(next);
+                    }}
+                    className="flex-1 border rounded px-2 py-1 text-sm"
+                  >
+                    <option value="">Warehouse...</option>
+                    {warehouses.map((w) => (
+                      <option key={w._id} value={w._id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={row.qty}
+                    onChange={(e) => {
+                      const next = [...overrideRows];
+                      next[idx] = { ...row, qty: e.target.value };
+                      setOverrideRows(next);
+                    }}
+                    placeholder="Qty"
+                    className="w-20 border rounded px-2 py-1 text-sm"
+                  />
+                  <button
+                    onClick={() => setOverrideRows(overrideRows.filter((_, i) => i !== idx))}
+                    className="text-red-500 text-xs hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setOverrideRows([...overrideRows, { quote_line_id: overrideRows[0]?.quote_line_id || '', warehouse_id: '', qty: '' }])}
+                className="text-blue-600 text-xs hover:underline"
+              >
+                + Add allocation row (same line, another warehouse)
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Reason (required)</label>
+              <input
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm"
+                placeholder="Why override the suggested split?"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowOverride(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+                Cancel
+              </button>
+              <button onClick={submitOverride} className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">
+                Apply Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

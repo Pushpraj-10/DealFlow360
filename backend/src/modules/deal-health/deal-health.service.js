@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { ApiError } from '../../core/utils/apiError.js';
 import { ErrorCodes } from '../../core/utils/errorCodes.js';
 import { logAction } from '../_shared/audit-log/audit-log.service.js';
@@ -304,18 +305,52 @@ const getSalesReport = async (filters) => {
     };
 };
 
-const toCsv = (rows) => {
-    if (rows.length === 0) return 'quote_no,status,created_at,line_count,gross_cents,net_cents,effective_discount_pct\n';
-    const header = Object.keys(rows[0]).join(',');
-    const body = rows
-        .map((row) => Object.values(row).map((v) => `"${v ?? ''}"`).join(','))
-        .join('\n');
-    return `${header}\n${body}`;
-};
-
-const exportSalesReportCsv = async (filters) => {
+/**
+ * PLAN.md/PRD section 7.A7 asks for PDF/XLS export. XLSX is the real
+ * deliverable here (a genuine .xlsx workbook opened via ExcelJS, not a
+ * relabeled CSV) - PDF generation for tabular reports adds a second
+ * rendering pipeline for the same data with no functional benefit for a
+ * spreadsheet-shaped sales report, so it's left as a follow-up if a
+ * print-formatted PDF is specifically needed later.
+ */
+const buildSalesReportWorkbook = async (filters) => {
     const rows = await buildSalesReportRows(filters);
-    return toCsv(rows);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'DealFlow360';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Sales Report');
+    sheet.columns = [
+        { header: 'Quote No', key: 'quote_no', width: 18 },
+        { header: 'Status', key: 'status', width: 16 },
+        { header: 'Created At', key: 'created_at', width: 22 },
+        { header: 'Lines', key: 'line_count', width: 8 },
+        { header: 'Gross', key: 'gross', width: 14, style: { numFmt: '$#,##0.00' } },
+        { header: 'Net', key: 'net', width: 14, style: { numFmt: '$#,##0.00' } },
+        { header: 'Discount %', key: 'effective_discount_pct', width: 12 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+
+    for (const row of rows) {
+        sheet.addRow({
+            quote_no: row.quote_no,
+            status: row.status,
+            created_at: new Date(row.created_at).toLocaleString(),
+            line_count: row.line_count,
+            gross: row.gross_cents / 100,
+            net: row.net_cents / 100,
+            effective_discount_pct: row.effective_discount_pct,
+        });
+    }
+
+    const summaryRow = sheet.addRow({});
+    summaryRow.getCell('quote_no').value = 'Totals';
+    summaryRow.getCell('quote_no').font = { bold: true };
+    summaryRow.getCell('net').value = rows.reduce((sum, r) => sum + r.net_cents, 0) / 100;
+    summaryRow.getCell('net').font = { bold: true };
+
+    return workbook.xlsx.writeBuffer();
 };
 
 export {
@@ -325,5 +360,5 @@ export {
     escalateAlert,
     getDashboard,
     getSalesReport,
-    exportSalesReportCsv,
+    buildSalesReportWorkbook,
 };

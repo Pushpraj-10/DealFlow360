@@ -28,10 +28,10 @@ const getSalesReport = asyncHandler(async (req, res) => {
 });
 
 const exportSalesReport = asyncHandler(async (req, res) => {
-    const csv = await dealHealthService.exportSalesReportCsv(req.query);
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="sales-report.csv"');
-    return res.status(200).send(csv);
+    const buffer = await dealHealthService.buildSalesReportWorkbook(req.query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="sales-report.xlsx"');
+    return res.status(200).send(Buffer.from(buffer));
 });
 
 export { listAlerts, nudgeAlert, escalateAlert, getDashboard, getSalesReport, exportSalesReport };
