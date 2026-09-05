@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, RefreshCw } from 'lucide-react';
 
 type Plan = {
   _id: string;
@@ -21,10 +22,9 @@ export default function SubscriptionPlansPage() {
   const [cancellationPolicy, setCancellationPolicy] = useState('credit_remaining');
 
   const load = () => {
-    api
-      .get<Plan[]>('/subscription-plans')
-      .then(setPlans)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load plans'));
+    api.get<Plan[]>('/subscription-plans').then(setPlans).catch((err) =>
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load plans')
+    );
   };
 
   useEffect(load, []);
@@ -42,82 +42,94 @@ export default function SubscriptionPlansPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Subscription Plans Setup</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + New Plan
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Subscription Plans</h1>
+          <p className="df-page-subtitle">Configure recurring billing cycles and cancellation policies</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          New Plan
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Plan Name</th>
-              <th className="pb-2">Cycle</th>
-              <th className="pb-2">Proration Policy</th>
-              <th className="pb-2">Cancellation Policy</th>
-            </tr>
-          </thead>
-          <tbody>
-            {plans.map((p) => (
-              <tr key={p._id} className="border-b">
-                <td className="py-3 font-medium">{p.name}</td>
-                <td className="py-3 capitalize">{p.cycle}</td>
-                <td className="py-3">{p.proration_policy}</td>
-                <td className="py-3">{p.cancellation_policy}</td>
-              </tr>
-            ))}
-            {plans.length === 0 && (
+      <div className="df-card">
+        {plans.length === 0 ? (
+          <div className="df-empty">
+            <RefreshCw size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No subscription plans</div>
+            <div className="df-empty-desc">Create a plan to enable recurring billing for customers.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={4} className="py-4 text-center text-gray-500">
-                  No plans yet.
-                </td>
+                <th>Plan</th>
+                <th>Billing Cycle</th>
+                <th>Proration Policy</th>
+                <th>Cancellation Policy</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {plans.map((p) => (
+                <tr key={p._id}>
+                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{p.cycle}</td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.proration_policy?.replace(/_/g, ' ')}</td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.cancellation_policy?.replace(/_/g, ' ')}</td>
+                  <td>
+                    <span className={`status-badge ${p.active ? 'status-active' : 'status-cancelled'}`}>
+                      {p.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">New Subscription Plan</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form onSubmit={handleCreate} className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">New Subscription Plan</h2>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Cycle</label>
-              <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-full border rounded px-3 py-2">
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Yearly</option>
-              </select>
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Plan name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} required className="df-input" placeholder="e.g. Pro Monthly" />
+              </div>
+              <div className="df-field">
+                <label className="df-label">Billing cycle</label>
+                <select value={cycle} onChange={(e) => setCycle(e.target.value)} className="df-select">
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Cancellation policy</label>
+                <select value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} className="df-select">
+                  <option value="none">None</option>
+                  <option value="credit_remaining">Credit Remaining</option>
+                  <option value="full_refund">Full Refund</option>
+                </select>
+              </div>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Cancellation Policy</label>
-              <select
-                value={cancellationPolicy}
-                onChange={(e) => setCancellationPolicy(e.target.value)}
-                className="w-full border rounded px-3 py-2"
-              >
-                <option value="none">None</option>
-                <option value="credit_remaining">Credit Remaining</option>
-                <option value="full_refund">Full Refund</option>
-              </select>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
-              </button>
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Plan</button>
             </div>
           </form>
         </div>

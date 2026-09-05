@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
 import { ApiClientError } from '@/lib/api';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,48 +29,218 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 w-96">
-        <h1 className="text-2xl font-bold mb-1 text-gray-900">DealFlow360</h1>
-        <p className="text-sm text-gray-500 mb-6">Sign in to the sales workspace</p>
-
-        {error && (
-          <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>
-        )}
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-            required
-          />
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#fff' }}>
+      {/* Left — Brand panel */}
+      <div
+        style={{
+          flex: '0 0 45%',
+          background: 'var(--sidebar-bg)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '48px',
+        }}
+        className="login-brand-panel"
+      >
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              background: 'var(--accent)',
+              borderRadius: 7,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>D</span>
+          </div>
+          <span style={{ color: '#FAFAFA', fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>
+            DealFlow360
+          </span>
         </div>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-            required
-          />
+
+        {/* Headline */}
+        <div>
+          <h1
+            style={{
+              color: '#FAFAFA',
+              fontSize: 32,
+              fontWeight: 700,
+              lineHeight: 1.15,
+              letterSpacing: '-0.03em',
+              marginBottom: 16,
+            }}
+          >
+            Intelligent B2B
+            <br />
+            Sales Operations
+          </h1>
+          <p style={{ color: 'var(--sidebar-muted)', fontSize: 14, lineHeight: 1.6, maxWidth: 340 }}>
+            From quotation to fulfillment — manage your entire sales pipeline with built-in discount governance, 
+            risk evaluation, and approval workflows.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 36 }}>
+            {[
+              'Automated discount governance',
+              'Multi-step approval workflows',
+              'Real-time deal health monitoring',
+              'End-to-end fulfillment tracking',
+            ].map((feat) => (
+              <div key={feat} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ color: 'var(--sidebar-text)', fontSize: 13 }}>{feat}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50"
-        >
-          {submitting ? 'Signing in...' : 'Sign in'}
-        </button>
+        <div style={{ color: 'var(--sidebar-muted)', fontSize: 12 }}>
+          © 2026 DealFlow360
+        </div>
+      </div>
 
-        <p className="text-xs text-gray-400 mt-4">
-          Seed accounts: rep@dealflow360.dev / ops@dealflow360.dev / admin@dealflow360.dev - password Password123!
-        </p>
-      </form>
+      {/* Right — Form panel */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg)',
+          padding: '48px 24px',
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: 380 }}>
+          <div style={{ marginBottom: 36 }}>
+            <h2
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.02em',
+                marginBottom: 6,
+              }}
+            >
+              Sign in to your workspace
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              Enter your credentials to access DealFlow360.
+            </p>
+          </div>
+
+          {error && (
+            <div className="df-alert df-alert-error" style={{ marginBottom: 20 }}>
+              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="df-field">
+              <label className="df-label" htmlFor="email">Email address</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="df-input"
+                placeholder="you@company.com"
+                required
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="df-field">
+              <label className="df-label" htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="df-input"
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn btn-primary btn-full"
+              style={{ marginTop: 8, padding: '10px 20px', fontSize: 14, gap: 8 }}
+            >
+              {submitting ? 'Signing in…' : 'Sign in'}
+              {!submitting && <ArrowRight size={14} />}
+            </button>
+          </form>
+
+          {/* Seed account helper */}
+          <div
+            style={{
+              marginTop: 28,
+              padding: '12px 14px',
+              background: 'var(--surface-02)',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, marginBottom: 6 }}>
+              DEMO ACCOUNTS
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {[
+                { role: 'Sales Rep', email: 'rep@dealflow360.dev' },
+                { role: 'Operations', email: 'ops@dealflow360.dev' },
+                { role: 'Admin', email: 'admin@dealflow360.dev' },
+              ].map(({ role, email: e }) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setEmail(e)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'none',
+                    border: 'none',
+                    padding: '3px 0',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{role}</span>
+                  <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'monospace' }}>{e}</span>
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              Password: Password123!
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .login-brand-panel {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

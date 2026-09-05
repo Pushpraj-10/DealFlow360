@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Boxes } from 'lucide-react';
 
 type Inventory = {
   _id: string;
@@ -20,45 +21,99 @@ export default function InventoryPage() {
     api
       .get<Inventory[]>('/inventory')
       .then(setRows)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load inventory'));
+      .catch((err) =>
+        setError(err instanceof ApiClientError ? err.message : 'Failed to load inventory')
+      );
   }, []);
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Inventory Management</h1>
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Inventory</h1>
+          <p className="df-page-subtitle">{rows.length} SKU{rows.length !== 1 ? 's' : ''} across all warehouses</p>
+        </div>
+      </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">SKU</th>
-              <th className="pb-2">Warehouse</th>
-              <th className="pb-2">On Hand</th>
-              <th className="pb-2">Reserved</th>
-              <th className="pb-2">Available</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((inv) => (
-              <tr key={inv._id} className="border-b">
-                <td className="py-3 font-medium">{inv.sku}</td>
-                <td className="py-3">{typeof inv.warehouse_id === 'object' ? inv.warehouse_id.name : inv.warehouse_id}</td>
-                <td className="py-3">{inv.on_hand}</td>
-                <td className="py-3">{inv.reserved}</td>
-                <td className={`py-3 font-bold ${inv.available < 0 ? 'text-red-600' : 'text-green-600'}`}>{inv.available}</td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
+      <div className="df-card">
+        {rows.length === 0 ? (
+          <div className="df-empty">
+            <Boxes size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No inventory records</div>
+            <div className="df-empty-desc">Inventory appears here once products are stocked in warehouses.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-500">
-                  No inventory yet.
-                </td>
+                <th>SKU</th>
+                <th>Warehouse</th>
+                <th style={{ textAlign: 'right' }}>On Hand</th>
+                <th style={{ textAlign: 'right' }}>Reserved</th>
+                <th style={{ textAlign: 'right' }}>Available</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((inv) => {
+                const low = inv.available <= 0;
+                return (
+                  <tr key={inv._id}>
+                    <td>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 500, fontSize: 13 }}>
+                        {inv.sku}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      {typeof inv.warehouse_id === 'object'
+                        ? inv.warehouse_id.name
+                        : inv.warehouse_id}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {inv.on_hand}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                      {inv.reserved}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span
+                        style={{
+                          fontVariantNumeric: 'tabular-nums',
+                          fontWeight: 600,
+                          color: low ? 'var(--red)' : inv.available < 10 ? 'var(--amber)' : 'var(--green)',
+                        }}
+                      >
+                        {inv.available}
+                      </span>
+                      {low && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            background: 'var(--red-light)',
+                            color: 'var(--red)',
+                            border: '1px solid var(--red-muted)',
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            fontWeight: 500,
+                          }}
+                        >
+                          shortage
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

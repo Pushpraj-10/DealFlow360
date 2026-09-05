@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, CreditCard } from 'lucide-react';
 
 type CreditNote = { _id: string; customer_id: string; amount_cents: number; reason: string; status: string };
 
@@ -18,10 +19,9 @@ export default function CreditNotesPage() {
   const [reason, setReason] = useState('');
 
   const load = () => {
-    api
-      .get<CreditNote[]>('/credit-notes')
-      .then(setNotes)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load credit notes'));
+    api.get<CreditNote[]>('/credit-notes').then(setNotes).catch((err) =>
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load credit notes')
+    );
   };
 
   useEffect(load, []);
@@ -29,7 +29,11 @@ export default function CreditNotesPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/credit-notes', { customer_id: customerId, amount_cents: Math.round(parseFloat(amount) * 100), reason });
+      await api.post('/credit-notes', {
+        customer_id: customerId,
+        amount_cents: Math.round(parseFloat(amount) * 100),
+        reason,
+      });
       setShowModal(false);
       setCustomerId('');
       setAmount('');
@@ -40,70 +44,91 @@ export default function CreditNotesPage() {
     }
   };
 
+  const totalIssued = notes.reduce((s, n) => s + n.amount_cents, 0);
+
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Credit Notes</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Issue Credit Note
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Credit Notes</h1>
+          <p className="df-page-subtitle">{notes.length} credit note{notes.length !== 1 ? 's' : ''} issued</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Issue Credit Note
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Amount</th>
-              <th className="pb-2">Reason</th>
-              <th className="pb-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {notes.map((n) => (
-              <tr key={n._id} className="border-b">
-                <td className="py-3 text-green-600 font-bold">{money(n.amount_cents)}</td>
-                <td className="py-3">{n.reason}</td>
-                <td className="py-3">
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">{n.status}</span>
-                </td>
-              </tr>
-            ))}
-            {notes.length === 0 && (
+      {notes.length > 0 && (
+        <div className="df-metric" style={{ marginBottom: 20, maxWidth: 240 }}>
+          <div className="df-metric-label">Total Credits Issued</div>
+          <div className="df-metric-value text-num">{money(totalIssued)}</div>
+        </div>
+      )}
+
+      <div className="df-card">
+        {notes.length === 0 ? (
+          <div className="df-empty">
+            <CreditCard size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No credit notes</div>
+            <div className="df-empty-desc">Credit notes are issued for returns, overpayments, or goodwill adjustments.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={3} className="py-4 text-center text-gray-500">
-                  No credit notes.
-                </td>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th>Reason</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {notes.map((n) => (
+                <tr key={n._id}>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--green)' }}>
+                    {money(n.amount_cents)}
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{n.reason}</td>
+                  <td>
+                    <span className="status-badge status-approved">{n.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Issue Credit Note</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Customer ID</label>
-              <input value={customerId} onChange={(e) => setCustomerId(e.target.value)} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form onSubmit={handleCreate} className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Issue Credit Note</h2>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Amount ($)</label>
-              <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Customer ID</label>
+                <input value={customerId} onChange={(e) => setCustomerId(e.target.value)} required className="df-input" placeholder="Customer ID" />
+              </div>
+              <div className="df-field">
+                <label className="df-label">Amount ($)</label>
+                <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="df-input" placeholder="0.00" />
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Reason</label>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} required className="df-input" placeholder="Reason for credit note" />
+              </div>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Reason</label>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} required className="w-full border rounded px-3 py-2" />
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Issue
-              </button>
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">Cancel</button>
+              <button type="submit" className="btn btn-primary">Issue</button>
             </div>
           </form>
         </div>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 
 type Backorder = { _id: string; fulfillment_id: string; quote_line_id: string; qty: number; status: string };
 
@@ -11,10 +12,9 @@ export default function BackordersPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const load = () => {
-    api
-      .get<Backorder[]>('/backorders')
-      .then(setBackorders)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load backorders'));
+    api.get<Backorder[]>('/backorders').then(setBackorders).catch((err) =>
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load backorders')
+    );
   };
 
   useEffect(load, []);
@@ -24,59 +24,95 @@ export default function BackordersPage() {
     setMessage(null);
     try {
       const result = await api.post<{ resolvedQty: number; remainingQty: number }>(`/backorders/${id}/consolidate`);
-      setMessage(`Resolved ${result.resolvedQty}, ${result.remainingQty} remaining.`);
+      setMessage(`Resolved ${result.resolvedQty} units. ${result.remainingQty} remaining.`);
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Consolidation failed');
     }
   };
 
+  const open = backorders.filter((b) => b.status !== 'RESOLVED');
+  const resolved = backorders.filter((b) => b.status === 'RESOLVED');
+
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Backorders Management</h1>
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Backorders</h1>
+          <p className="df-page-subtitle">
+            {open.length > 0
+              ? `${open.length} open backorder${open.length !== 1 ? 's' : ''} require consolidation`
+              : 'No open backorders'}
+          </p>
+        </div>
+      </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
-      {message && <div className="mb-4 px-3 py-2 bg-blue-50 text-blue-700 text-sm rounded border border-blue-200">{message}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
+      {message && (
+        <div className="df-alert df-alert-success">
+          <CheckCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{message}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Fulfillment</th>
-              <th className="pb-2">Shortage Qty</th>
-              <th className="pb-2">Status</th>
-              <th className="pb-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {backorders.map((b) => (
-              <tr key={b._id} className="border-b">
-                <td className="py-3 font-medium text-blue-600">{b.fulfillment_id.slice(-6)}</td>
-                <td className="py-3 text-red-600 font-bold">{b.qty}</td>
-                <td className="py-3">{b.status}</td>
-                <td className="py-3">
-                  {b.status !== 'RESOLVED' ? (
-                    <button
-                      onClick={() => consolidate(b._id)}
-                      className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded hover:bg-yellow-200"
-                    >
-                      Consolidate Now
-                    </button>
-                  ) : (
-                    <span className="text-gray-400">Resolved</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {backorders.length === 0 && (
+      <div className="df-card">
+        {backorders.length === 0 ? (
+          <div className="df-empty">
+            <AlertTriangle size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No backorders</div>
+            <div className="df-empty-desc">Backorders appear here when a fulfillment has stock shortages.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={4} className="py-4 text-center text-gray-500">
-                  No backorders.
-                </td>
+                <th>Fulfillment</th>
+                <th style={{ textAlign: 'right' }}>Shortage Qty</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {backorders.map((b) => (
+                <tr key={b._id}>
+                  <td>
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}>
+                      …{b.fulfillment_id.slice(-6)}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: b.status !== 'RESOLVED' ? 'var(--amber)' : 'var(--green)' }}>
+                    {b.qty}
+                  </td>
+                  <td>
+                    <span className={`status-badge ${b.status === 'RESOLVED' ? 'status-approved' : 'status-returned'}`}>
+                      {b.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {b.status !== 'RESOLVED' ? (
+                      <button
+                        onClick={() => consolidate(b._id)}
+                        className="btn btn-warning btn-sm"
+                      >
+                        Consolidate
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                        <CheckCircle size={11} color="var(--green)" />
+                        Done
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

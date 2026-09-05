@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, DollarSign } from 'lucide-react';
 
 type Invoice = { _id: string; invoice_no: string };
 type Payment = { _id: string; invoice_id: string; amount_cents: number; paid_at: string; method: string; reference?: string };
@@ -33,42 +34,74 @@ export default function PaymentsPage() {
     })();
   }, []);
 
+  const totalCollected = rows.reduce((s, r) => s + r.amount_cents, 0);
+
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Payments</h1>
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Payments</h1>
+          <p className="df-page-subtitle">{rows.length} payment{rows.length !== 1 ? 's' : ''} recorded</p>
+        </div>
+      </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Invoice</th>
-              <th className="pb-2">Amount</th>
-              <th className="pb-2">Method</th>
-              <th className="pb-2">Reference</th>
-              <th className="pb-2">Paid At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p._id} className="border-b">
-                <td className="py-3 font-medium">{p.invoiceNo}</td>
-                <td className="py-3 text-green-600 font-bold">{money(p.amount_cents)}</td>
-                <td className="py-3 capitalize">{p.method}</td>
-                <td className="py-3">{p.reference || '-'}</td>
-                <td className="py-3">{new Date(p.paid_at).toLocaleString()}</td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
+      {rows.length > 0 && (
+        <div className="df-metric" style={{ marginBottom: 20, maxWidth: 240 }}>
+          <div className="df-metric-label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <DollarSign size={10} />
+            Total Collected
+          </div>
+          <div className="df-metric-value text-num" style={{ color: 'var(--green)' }}>{money(totalCollected)}</div>
+          <div className="df-metric-sub">across all invoices</div>
+        </div>
+      )}
+
+      <div className="df-card">
+        {rows.length === 0 ? (
+          <div className="df-empty">
+            <DollarSign size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No payments recorded</div>
+            <div className="df-empty-desc">Payments appear here after you record them on invoices.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-500">
-                  No payments recorded yet.
-                </td>
+                <th>Invoice</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th>Method</th>
+                <th>Reference</th>
+                <th>Paid At</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p._id}>
+                  <td>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{p.invoiceNo}</span>
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--green)' }}>
+                    {money(p.amount_cents)}
+                  </td>
+                  <td style={{ textTransform: 'capitalize', color: 'var(--text-secondary)' }}>{p.method}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                    {p.reference || '—'}
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                    {new Date(p.paid_at).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

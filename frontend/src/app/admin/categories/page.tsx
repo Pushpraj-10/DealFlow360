@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, ListFilter } from 'lucide-react';
 
 type Category = { _id: string; name: string; maxAllowedDiscountPercent: number; isActive: boolean };
 
@@ -34,63 +35,82 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Product Categories</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Add Category
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Product Categories</h1>
+          <p className="df-page-subtitle">Category discount ceilings govern product-level discount rules</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Add Category
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Max Discount %</th>
-              <th className="pb-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map((c) => (
-              <tr key={c._id} className="border-b">
-                <td className="py-3 font-medium">{c.name}</td>
-                <td className="py-3">{c.maxAllowedDiscountPercent}%</td>
-                <td className={`py-3 ${c.isActive ? 'text-green-600' : 'text-gray-400'}`}>{c.isActive ? 'Active' : 'Inactive'}</td>
-              </tr>
-            ))}
-            {categories.length === 0 && (
+      <div className="df-card">
+        {categories.length === 0 ? (
+          <div className="df-empty">
+            <ListFilter size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No categories yet</div>
+            <div className="df-empty-desc">Categories define discount ceilings for groups of products.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={3} className="py-4 text-center text-gray-500">
-                  No categories yet.
-                </td>
+                <th>Category</th>
+                <th style={{ textAlign: 'right' }}>Max Discount</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {categories.map((c) => (
+                <tr key={c._id}>
+                  <td style={{ fontWeight: 500 }}>{c.name}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {c.maxAllowedDiscountPercent}%
+                  </td>
+                  <td>
+                    <span className={`status-badge ${c.isActive ? 'status-active' : 'status-cancelled'}`}>
+                      {c.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Add Category</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form onSubmit={handleCreate} className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Category</h2>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Max Allowed Discount %</label>
-              <input type="number" value={maxDiscount} onChange={(e) => setMaxDiscount(e.target.value)} className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Category name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} required className="df-input" placeholder="e.g. Hardware, Software, Services" />
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Max allowed discount (%)</label>
+                <input type="number" value={maxDiscount} onChange={(e) => setMaxDiscount(e.target.value)} className="df-input" min="0" max="100" />
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Products in this category cannot receive discounts above this ceiling.
+                </p>
+              </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
-              </button>
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Category</button>
             </div>
           </form>
         </div>
