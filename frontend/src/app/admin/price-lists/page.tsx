@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, BadgePercent } from 'lucide-react';
 
 type Tier = { _id: string; name: string };
@@ -10,6 +11,8 @@ type PriceListItem = { _id: string; productId: string; unitPrice: number; basePr
 type PriceList = { _id: string; name: string; customerTierId: { _id: string; name: string } | string; currencyCode: string; items: PriceListItem[] };
 
 export default function PriceListsPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -21,7 +24,9 @@ export default function PriceListsPage() {
 
   const load = () => {
     api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
-    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    if (canManage) {
+      api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    }
     api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   };
 
@@ -63,10 +68,12 @@ export default function PriceListsPage() {
           <h1>Price Lists</h1>
           <p>Tier-specific pricing for products in quotations.</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Price List
-        </button>
+        {canManage && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Price List
+          </button>
+        )}
       </div>
 
       {error && (
@@ -106,9 +113,11 @@ export default function PriceListsPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{pl.currencyCode}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pl.items.length}</td>
                   <td>
-                    <button onClick={() => setItemsFor(pl)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
-                      Add Item
-                    </button>
+                    {canManage && (
+                      <button onClick={() => setItemsFor(pl)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+                        Add Item
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
