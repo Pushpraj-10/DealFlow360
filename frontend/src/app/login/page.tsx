@@ -18,8 +18,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [mode, setMode] = useState<'login' | 'request'>('login');
-  const [email, setEmail] = useState('finance@dealflow360.test');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [proposedRole, setProposedRole] = useState('SALES_REP');
   const [team, setTeam] = useState('');
@@ -333,53 +333,6 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Seed account helper */}
-              {mode === 'login' && (
-                <div
-                  style={{
-                    marginTop: 28,
-                    padding: '12px 14px',
-                    background: 'var(--surface-02)',
-                    borderRadius: 'var(--radius)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, marginBottom: 6 }}>
-                    DEMO ACCOUNTS
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {[
-                      { role: 'Sales Rep', email: 'sales.rep@dealflow360.test' },
-                      { role: 'Sales Manager', email: 'sales.manager@dealflow360.test' },
-                      { role: 'Finance', email: 'finance@dealflow360.test' },
-                      { role: 'Admin', email: 'admin@dealflow360.test' },
-                      { role: 'Customer', email: 'customer@acme.test' },
-                    ].map(({ role, email: e }) => (
-                      <button
-                        key={e}
-                        type="button"
-                        onClick={() => setEmail(e)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: 'none',
-                          border: 'none',
-                          padding: '3px 0',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{role}</span>
-                        <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'monospace' }}>{e}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                    Password: Password123!
-                  </p>
-                </div>
-              )}
             </>
           )}
         </div>
