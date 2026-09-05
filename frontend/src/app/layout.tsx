@@ -22,15 +22,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} data-theme="dark">
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              (function() {
+              try {
                 const theme = localStorage.getItem('theme') || 'dark';
                 document.documentElement.setAttribute('data-theme', theme);
-              })();
+              } catch (e) {}
             `,
           }}
         />
