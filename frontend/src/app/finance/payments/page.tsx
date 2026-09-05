@@ -12,6 +12,7 @@ type PaymentRow = Payment & {
 
 export default function PaymentsPage() {
   const [rows, setRows] = useState<PaymentRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,6 +30,8 @@ export default function PaymentsPage() {
         setRows(all);
       } catch (err) {
         setError(err instanceof ApiClientError ? err.message : 'Failed to load payments');
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -36,8 +39,8 @@ export default function PaymentsPage() {
   const totalCollected = useMemo(() => rows.reduce((sum, row) => sum + row.amount_cents, 0), [rows]);
 
   return (
-    <div className="ops-page">
-      <div className="ops-page-heading">
+    <div className="ops-page payments-page">
+      <div className="ops-page-heading payments-page__header">
         <div>
           <p className="ops-eyebrow">Finance</p>
           <h1>Payments</h1>
@@ -68,7 +71,13 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {rows.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : rows.length === 0 ? (
           <div className="df-empty">
             <CreditCard size={28} />
             <div className="df-empty-title">No payments recorded</div>

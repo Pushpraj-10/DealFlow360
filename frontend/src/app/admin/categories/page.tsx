@@ -11,6 +11,7 @@ export default function CategoriesPage() {
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
@@ -20,7 +21,8 @@ export default function CategoriesPage() {
     api
       .get<{ categories: Category[] }>('/categories')
       .then((d) => setCategories(d.categories))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load categories'));
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load categories'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -38,8 +40,8 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page categories-page">
+      <div className="admin-page-header categories-page__header">
         <div>
           <p className="admin-eyebrow">Sales</p>
           <h1>Product Categories</h1>
@@ -60,8 +62,14 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {categories.length === 0 ? (
+      <div className="admin-panel categories-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : categories.length === 0 ? (
           <div className="df-empty">
             <ListFilter size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No categories yet</div>

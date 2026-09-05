@@ -113,7 +113,9 @@ export function approvalAmount(request: ApprovalRequest) {
 }
 
 export function approvalCustomer(request: ApprovalRequest) {
-  return getCustomerName(quoteFromApproval(request)?.customer || null);
+  const quote = quoteFromApproval(request);
+  const customer = quote?.customer || (quote as unknown as { customerId?: QuotationListItem['customer'] })?.customerId;
+  return getCustomerName(customer || null);
 }
 
 export function approvalQuoteNumber(request: ApprovalRequest) {

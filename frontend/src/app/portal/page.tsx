@@ -40,8 +40,8 @@ export default function PortalHomePage() {
   }, []);
 
   return (
-    <div className="portal-page">
-      <div className="portal-home-header">
+    <div className="portal-page portal-home-page">
+      <div className="portal-home-header portal-home-page__header">
         <p className="portal-eyebrow">My Quote</p>
         <h1>
           Your Quotations

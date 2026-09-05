@@ -41,6 +41,7 @@ function AllocationBar({ allocation, total }: { allocation: Allocation; total: n
 export default function FulfillmentPage() {
   const router = useRouter();
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FulfillmentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,8 @@ export default function FulfillmentPage() {
       .then(setFulfillments)
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load fulfillments')
-      );
+      )
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -179,8 +181,8 @@ export default function FulfillmentPage() {
   const shipmentCount = detail?.allocations.filter((allocation) => Number(allocation.shipped_qty || 0) > 0).length || 0;
 
   return (
-    <div className="ops-page">
-      <div className="ops-page-heading">
+    <div className="ops-page fulfillment-page">
+      <div className="ops-page-heading fulfillment-page__header">
         <div>
           <p className="ops-eyebrow">Fulfillment</p>
           <h1>Warehouse allocation</h1>
@@ -228,7 +230,13 @@ export default function FulfillmentPage() {
             <span>{fulfillments.filter((item) => isOpenFulfillment(item.status)).length} open</span>
           </div>
 
-          {fulfillments.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '60%' }} />
+            </div>
+          ) : fulfillments.length === 0 ? (
             <div className="df-empty">
               <Truck size={28} />
               <div className="df-empty-title">No fulfillments</div>

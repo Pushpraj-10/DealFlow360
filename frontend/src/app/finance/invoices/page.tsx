@@ -23,6 +23,7 @@ function isOverdue(invoice: Invoice) {
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<Invoice | null>(null);
@@ -34,7 +35,8 @@ export default function InvoicesPage() {
       .then(setInvoices)
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load invoices')
-      );
+      )
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -69,8 +71,8 @@ export default function InvoicesPage() {
   const outstanding = totals.invoiced - totals.paid;
 
   return (
-    <div className="ops-page">
-      <div className="ops-page-heading">
+    <div className="ops-page invoices-page">
+      <div className="ops-page-heading invoices-page__header">
         <div>
           <p className="ops-eyebrow">Finance</p>
           <h1>Invoices</h1>
@@ -112,7 +114,13 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          {invoices.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '60%' }} />
+            </div>
+          ) : invoices.length === 0 ? (
             <div className="df-empty">
               <Receipt size={28} />
               <div className="df-empty-title">No invoices</div>

@@ -50,8 +50,8 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page reports-page">
+      <div className="admin-page-header reports-page__header">
         <div>
           <p className="admin-eyebrow">Insights</p>
           <h1>Sales Reports</h1>
@@ -93,6 +93,17 @@ export default function ReportsPage() {
           </button>
         ))}
       </div>
+
+      {!report && !error && (
+        <div className="admin-metric-row reports-page__loading">
+          {[0, 1, 2].map((i) => (
+            <div className="df-metric" key={i}>
+              <div className="skeleton" style={{ height: 11, width: 70, marginBottom: 10 }} />
+              <div className="skeleton" style={{ height: 24, width: 90 }} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {report && (
         <>

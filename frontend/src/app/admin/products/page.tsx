@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, Package, X } from 'lucide-react';
 
 type Category = { _id: string; name: string };
@@ -40,7 +41,10 @@ function BillingBadge({ type }: { type: string }) {
 }
 
 export default function ProductsPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN';
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -60,7 +64,7 @@ export default function ProductsPage() {
   });
 
   const load = () => {
-    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load products'));
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load products')).finally(() => setLoading(false));
     api.get<{ categories: Category[] }>('/categories').then((d) => setCategories(d.categories)).catch(() => {});
   };
 
@@ -99,17 +103,19 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page products-page">
+      <div className="admin-page-header products-page__header">
         <div>
           <p className="admin-eyebrow">Sales</p>
           <h1>Product Catalog</h1>
           <p>{products.length} product{products.length !== 1 ? 's' : ''} in catalog</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Product
-        </button>
+        {canManage && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Product
+          </button>
+        )}
       </div>
 
       {error && (
@@ -119,8 +125,14 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {products.length === 0 ? (
+      <div className="admin-panel products-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : products.length === 0 ? (
           <div className="df-empty">
             <Package size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No products yet</div>
@@ -351,18 +363,20 @@ export default function ProductsPage() {
                   No variants yet.
                 </p>
               )}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  value={newSku}
-                  onChange={(e) => setNewSku(e.target.value)}
-                  placeholder="SKU (e.g. SSD-512GB)"
-                  className="df-input"
-                  style={{ flex: 1 }}
-                />
-                <button onClick={addVariant} disabled={!newSku} className="btn btn-secondary">
-                  Add
-                </button>
-              </div>
+              {canManage && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={newSku}
+                    onChange={(e) => setNewSku(e.target.value)}
+                    placeholder="SKU (e.g. SSD-512GB)"
+                    className="df-input"
+                    style={{ flex: 1 }}
+                  />
+                  <button onClick={addVariant} disabled={!newSku} className="btn btn-secondary">
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
             <div className="df-modal-footer">
               <button onClick={() => setVariantsFor(null)} className="btn btn-ghost">

@@ -172,8 +172,8 @@ function SalesRepOverview() {
   const firstName = user?.fullName?.split(' ')[0] || 'there';
 
   return (
-    <div className="sales-page">
-      <section className="sales-hero-panel">
+    <div className="sales-page sales-rep-home">
+      <section className="sales-hero-panel sales-rep-home__hero">
         <div>
           <p className="sales-eyebrow">Today</p>
           <h1>Good afternoon, {firstName}</h1>
@@ -323,8 +323,8 @@ function SalesManagerOverview() {
   const returnedQuotes = quotations.filter((q) => q.status === 'RETURNED_FOR_REVISION').length;
 
   return (
-    <div className="sales-page">
-      <section className="sales-hero-panel">
+    <div className="sales-page sales-manager-home">
+      <section className="sales-hero-panel sales-manager-home__hero">
         <div>
           <p className="sales-eyebrow">Manager Workspace</p>
           <h1>Approvals requiring attention</h1>
@@ -538,8 +538,8 @@ function FinanceOperationsOverview() {
     .slice(0, 5);
 
   return (
-    <div className="ops-page">
-      <section className="ops-hero-panel">
+    <div className="ops-page finance-ops-home">
+      <section className="ops-hero-panel finance-ops-home__hero">
         <div>
           <p className="ops-eyebrow">Finance / Operations</p>
           <h1>Operations today</h1>

@@ -201,7 +201,7 @@ export default function PortalQuotationPage() {
   const messages = quotation?.negotiationHistory?.messages || [];
 
   return (
-    <div className="portal-page">
+    <div className="portal-page portal-quotation-detail-page">
       {error && (
         <div className="df-alert df-alert-error">
           <AlertCircle size={14} />

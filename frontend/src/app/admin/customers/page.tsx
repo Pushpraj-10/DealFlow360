@@ -47,6 +47,7 @@ export default function CustomersPage() {
   const canCreate = user?.role === 'ADMIN';
   const isSalesRep = user?.role === 'SALES_REP';
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -62,7 +63,8 @@ export default function CustomersPage() {
         setCustomers(d.customers);
         setSelectedCustomerId((current) => current || d.customers[0]?._id || null);
       })
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'));
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'))
+      .finally(() => setLoading(false));
     if (canCreate) {
       api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
     }
@@ -113,8 +115,8 @@ export default function CustomersPage() {
 
   if (!isSalesRep) {
     return (
-      <div className="df-page">
-        <div className="df-page-header">
+      <div className="df-page customers-page">
+        <div className="df-page-header customers-page__header">
           <div>
             <h1 className="df-page-title">Customers</h1>
             <p className="df-page-subtitle">{customers.length} customer{customers.length !== 1 ? 's' : ''} in your workspace</p>
@@ -132,8 +134,14 @@ export default function CustomersPage() {
             <span>{error}</span>
           </div>
         )}
-        <div className="df-card">
-          {customers.length === 0 ? (
+        <div className="df-card customers-page__panel">
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '60%' }} />
+            </div>
+          ) : customers.length === 0 ? (
             <div className="df-empty">
               <Users size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
               <div className="df-empty-title">No customers yet</div>
@@ -184,8 +192,8 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="sales-page">
-      <div className="sales-page-heading">
+    <div className="sales-page crm-workspace-page">
+      <div className="sales-page-heading crm-workspace-page__header">
         <div>
           <p className="sales-eyebrow">Customers</p>
           <h1>CRM workspace</h1>
@@ -205,8 +213,14 @@ export default function CustomersPage() {
       )}
 
       <div className="sales-crm-layout">
-        <section className="sales-crm-list">
-          {filteredCustomers.length === 0 ? (
+        <section className="sales-crm-list crm-workspace-page__list">
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 44, marginBottom: 10, borderRadius: 'var(--radius-md)' }} />
+              <div className="skeleton" style={{ height: 44, marginBottom: 10, borderRadius: 'var(--radius-md)' }} />
+              <div className="skeleton" style={{ height: 44, borderRadius: 'var(--radius-md)' }} />
+            </div>
+          ) : filteredCustomers.length === 0 ? (
             <div className="sales-empty-state">
               <Users size={30} />
               <strong>No customers found</strong>
@@ -235,8 +249,13 @@ export default function CustomersPage() {
           )}
         </section>
 
-        <section className="sales-customer-detail">
-          {!selectedCustomer ? (
+        <section className="sales-customer-detail crm-workspace-page__detail">
+          {loading ? (
+            <div style={{ padding: '18px' }}>
+              <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 16, width: '80%' }} />
+            </div>
+          ) : !selectedCustomer ? (
             <div className="sales-empty-state">
               <Building2 size={30} />
               <strong>Select a customer</strong>

@@ -68,8 +68,8 @@ export default function TeamDealsPage() {
   const totalValue = filtered.reduce((sum, quotation) => sum + Number(quotation.total || 0), 0);
 
   return (
-    <div className="manager-page">
-      <div className="manager-page-heading">
+    <div className="manager-page team-deals-page">
+      <div className="manager-page-heading team-deals-page__header">
         <div>
           <p className="sales-eyebrow">Team Deals</p>
           <h1>Manager deal visibility</h1>

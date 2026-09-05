@@ -14,6 +14,7 @@ export default function PriceListsPage() {
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export default function PriceListsPage() {
   const [itemForm, setItemForm] = useState({ productId: '', unitPrice: '', basePriceOverride: '' });
 
   const load = () => {
-    api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
+    api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists')).finally(() => setLoading(false));
     if (canManage) {
       api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
     }
@@ -61,8 +62,8 @@ export default function PriceListsPage() {
   };
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-page price-lists-page">
+      <div className="admin-page-header price-lists-page__header">
         <div>
           <p className="admin-eyebrow">Sales</p>
           <h1>Price Lists</h1>
@@ -83,8 +84,14 @@ export default function PriceListsPage() {
         </div>
       )}
 
-      <div className="admin-panel">
-        {priceLists.length === 0 ? (
+      <div className="admin-panel price-lists-page__panel">
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : priceLists.length === 0 ? (
           <div className="df-empty">
             <BadgePercent size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No price lists</div>

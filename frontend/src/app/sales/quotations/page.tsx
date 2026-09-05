@@ -22,6 +22,7 @@ import {
   timeAgo,
   type QuotationListItem,
 } from '@/lib/salesRep';
+import { TableSkeletonRows } from '@/components/ui/primitives';
 
 type Customer = { _id: string; name: string; company: string };
 type Product = { _id: string; name: string };
@@ -74,12 +75,14 @@ export default function QuotationsPage() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const loadQuotations = () => {
     api
       .get<{ quotations: QuotationListItem[] }>('/quotations')
       .then((d) => setQuotations(d.quotations.map(normalizeQuotationCard)))
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotations'));
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotations'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -222,8 +225,8 @@ export default function QuotationsPage() {
     : false;
 
   return (
-    <div className="sales-page">
-      <div className="sales-page-heading">
+    <div className="sales-page quotations-page">
+      <div className="sales-page-heading quotations-page__header">
         <div>
           <p className="sales-eyebrow">Quotations</p>
           <h1>Commercial workbench</h1>
@@ -301,7 +304,8 @@ export default function QuotationsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredQuotations.map((quotation) => (
+              {loading && <TableSkeletonRows columns={7} />}
+              {!loading && filteredQuotations.map((quotation) => (
                 <tr
                   key={quotation.id}
                   className={selectedId === quotation.id ? 'selected' : ''}
@@ -329,7 +333,7 @@ export default function QuotationsPage() {
                   <td>{timeAgo(getActivityTime(quotation))}</td>
                 </tr>
               ))}
-              {filteredQuotations.length === 0 && (
+              {!loading && filteredQuotations.length === 0 && (
                 <tr>
                   <td colSpan={7}>
                     <div className="sales-empty-line">No quotations match the current filters.</div>

@@ -61,6 +61,7 @@ function detailsText(details: Record<string, unknown>) {
 
 export default function DealHealthPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
@@ -78,7 +79,8 @@ export default function DealHealthPage() {
       .then(setAlerts)
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load alerts')
-      );
+      )
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, [typeFilter, severityFilter, statusFilter]);
@@ -103,8 +105,8 @@ export default function DealHealthPage() {
   }, [alerts]);
 
   return (
-    <div className="health-page">
-      <div className="health-header">
+    <div className="health-page deal-health-page">
+      <div className="health-header deal-health-page__header">
         <div>
           <p className="admin-eyebrow">Insights</p>
           <h1>Deal Health</h1>
@@ -150,7 +152,13 @@ export default function DealHealthPage() {
           <span>{sortedAlerts.length} total</span>
         </div>
 
-        {sortedAlerts.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '18px' }}>
+            <div className="skeleton" style={{ height: 16, marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '80%', marginBottom: 12 }} />
+            <div className="skeleton" style={{ height: 16, width: '60%' }} />
+          </div>
+        ) : sortedAlerts.length === 0 ? (
           <div className="df-empty">
             <Activity size={28} />
             <div className="df-empty-title">No active deal risks</div>
