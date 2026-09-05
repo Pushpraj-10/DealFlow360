@@ -1,8 +1,12 @@
 import { Router } from 'express';
-import { authenticate, requireInternalUser } from '../../core/middlewares/auth.middleware.js';
+import { USER_ROLES } from '../../core/constants.js';
+import { authenticate, requireInternalUser, requireRoles } from '../../core/middlewares/auth.middleware.js';
 import {
     listPlans,
     createPlan,
+    getPlan,
+    updatePlan,
+    deletePlan,
     listSubscriptions,
     getSubscription,
     createSubscription,
@@ -18,6 +22,9 @@ router.use(authenticate, requireInternalUser);
 
 router.get('/subscription-plans', listPlans);
 router.post('/subscription-plans', createPlan);
+router.get('/subscription-plans/:id', getPlan);
+router.patch('/subscription-plans/:id', requireRoles(USER_ROLES.ADMIN), updatePlan);
+router.delete('/subscription-plans/:id', requireRoles(USER_ROLES.ADMIN), deletePlan);
 
 router.get('/subscriptions', listSubscriptions);
 router.post('/subscriptions', createSubscription);

@@ -8,6 +8,9 @@ const findPlanById = (id) => SubscriptionPlan.findById(id);
 
 const createPlan = (data) => SubscriptionPlan.create(data);
 
+const updatePlanById = (id, data) =>
+    SubscriptionPlan.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+
 const findSubscriptions = (filter = {}) => Subscription.find(filter).populate('plan_id').sort({ created_at: -1 });
 
 const findSubscriptionsByQuoteLineIds = (quoteLineIds) =>
@@ -35,6 +38,7 @@ export {
     findPlans,
     findPlanById,
     createPlan,
+    updatePlanById,
     findSubscriptions,
     findSubscriptionsByQuoteLineIds,
     findSubscriptionById,
