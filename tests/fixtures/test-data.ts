@@ -7,34 +7,34 @@
 
 export const TEST_USERS = {
   salesRep: {
-    email: 'rep@dealflow360.dev',
+    email: 'sales.rep@dealflow360.test',
     password: 'Password123!',
     role: 'SALES_REP',
-    expectedName: 'Sam Rep',
+    expectedName: 'Sam Sales Rep',
   },
   salesManager: {
-    email: 'manager@dealflow360.dev',
+    email: 'sales.manager@dealflow360.test',
     password: 'Password123!',
     role: 'SALES_MANAGER',
-    expectedName: 'Sarah Manager',
+    expectedName: 'Maya Sales Manager',
   },
   finance: {
-    email: 'ops@dealflow360.dev',
+    email: 'finance@dealflow360.test',
     password: 'Password123!',
     role: 'FINANCE',
-    expectedName: 'Olivia Ops',
+    expectedName: 'Finn Finance',
   },
   admin: {
-    email: 'admin@dealflow360.dev',
+    email: 'admin@dealflow360.test',
     password: 'Password123!',
     role: 'ADMIN',
-    expectedName: 'Alex Admin',
+    expectedName: 'Ada Admin',
   },
   customer: {
-    email: 'customer@dealflow360.dev',
+    email: 'customer@acme.test',
     password: 'Password123!',
     role: 'CUSTOMER',
-    expectedName: 'Chris Customer',
+    expectedName: 'Acme Buyer',
   },
 } as const;
 
@@ -55,11 +55,15 @@ export const ROUTES = {
   dashboard: '/',
   quotations: '/sales/quotations',
   approvals: '/sales/approvals',
-  customerPortal: '/portal/quotation',
+  teamDeals: '/sales/team-deals',
+  customerPortal: '/portal',
   fulfillment: '/operations/fulfillment',
   invoices: '/finance/invoices',
+  payments: '/finance/payments',
+  subscriptions: '/finance/subscriptions',
   products: '/admin/products',
   customers: '/admin/customers',
+  dealHealth: '/management/deal-health',
 } as const;
 
 /**
@@ -69,4 +73,90 @@ export const NAV_ELEMENTS = {
   dashboard: 'Overview',
   quotations: 'Quotations',
   approvals: 'Approvals',
+  pipeline: 'Pipeline',
+  customers: 'Customers',
+} as const;
+
+/**
+ * Test products from seed data
+ */
+export const TEST_PRODUCTS = {
+  laptop: {
+    name: 'Laptop',
+    category: 'Hardware',
+    price: 1200,
+    cost: 850,
+    type: 'ONE_TIME',
+  },
+  setupService: {
+    name: 'Setup Service',
+    category: 'Services',
+    price: 500,
+    cost: 250,
+    type: 'ONE_TIME',
+  },
+  extendedWarranty: {
+    name: 'Extended Warranty',
+    category: 'Services',
+    price: 199,
+    cost: 80,
+    type: 'ONE_TIME',
+  },
+  supportPlan: {
+    name: 'Support Plan',
+    category: 'Subscription',
+    price: 99,
+    cost: 35,
+    type: 'RECURRING',
+  },
+} as const;
+
+/**
+ * Test customer data
+ */
+export const TEST_CUSTOMER = {
+  name: 'Acme Corp',
+  tier: 'Gold',
+  tierLimit: 20, // percentage
+  email: 'customer@acme.test',
+} as const;
+
+/**
+ * Tier discount limits from seed data
+ */
+export const TIER_LIMITS = {
+  Bronze: 5,
+  Silver: 10,
+  Gold: 20,
+} as const;
+
+/**
+ * Category discount limits from seed data
+ */
+export const CATEGORY_LIMITS = {
+  Hardware: 15,
+  Services: 10,
+  Subscription: 12,
+} as const;
+
+/**
+ * Seed quotation for testing
+ */
+export const SEED_QUOTATION = {
+  quoteNumber: 'Q-SEED-GOLD-DISCOUNT-SCENARIO',
+  lines: [
+    {
+      product: 'Laptop',
+      discount: 12,
+      allowedLimit: 15, // min(Gold 20%, Hardware 15%)
+      isViolation: false,
+    },
+    {
+      product: 'Setup Service',
+      discount: 18,
+      allowedLimit: 10, // min(Gold 20%, Services 10%)
+      isViolation: true,
+      excessDiscount: 8, // 18% - 10%
+    },
+  ],
 } as const;
