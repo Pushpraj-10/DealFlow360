@@ -1,29 +1,28 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CreditCard } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, DollarSign } from 'lucide-react';
+import { customerLabel, formatDateTime, moneyCents, type Invoice, type Payment } from '@/lib/operations';
 
-type Invoice = { _id: string; invoice_no: string };
-type Payment = { _id: string; invoice_id: string; amount_cents: number; paid_at: string; method: string; reference?: string };
-
-function money(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
+type PaymentRow = Payment & {
+  invoiceNo: string;
+  customer: Invoice['customer_id'];
+};
 
 export default function PaymentsPage() {
-  const [rows, setRows] = useState<(Payment & { invoiceNo: string })[]>([]);
+  const [rows, setRows] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const invoices = await api.get<Invoice[]>('/invoices');
-        const all: (Payment & { invoiceNo: string })[] = [];
-        for (const inv of invoices) {
-          const detail = await api.get<{ payments: Payment[] }>(`/invoices/${inv._id}`);
-          for (const p of detail.payments) {
-            all.push({ ...p, invoiceNo: inv.invoice_no });
+        const all: PaymentRow[] = [];
+        for (const invoice of invoices) {
+          const detail = await api.get<{ payments: Payment[] }>(`/invoices/${invoice._id}`);
+          for (const payment of detail.payments) {
+            all.push({ ...payment, invoiceNo: invoice.invoice_no, customer: invoice.customer_id });
           }
         }
         all.sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime());
@@ -34,75 +33,82 @@ export default function PaymentsPage() {
     })();
   }, []);
 
-  const totalCollected = rows.reduce((s, r) => s + r.amount_cents, 0);
+  const totalCollected = useMemo(() => rows.reduce((sum, row) => sum + row.amount_cents, 0), [rows]);
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="ops-page">
+      <div className="ops-page-heading">
         <div>
-          <h1 className="df-page-title">Payments</h1>
-          <p className="df-page-subtitle">{rows.length} payment{rows.length !== 1 ? 's' : ''} recorded</p>
+          <p className="ops-eyebrow">Finance</p>
+          <h1>Payments</h1>
+          <p>Recorded collections with invoice references, methods, and timestamps.</p>
         </div>
       </div>
 
       {error && (
         <div className="df-alert df-alert-error">
-          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <AlertCircle size={14} />
           <span>{error}</span>
         </div>
       )}
 
-      {rows.length > 0 && (
-        <div className="df-metric" style={{ marginBottom: 20, maxWidth: 240 }}>
-          <div className="df-metric-label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <DollarSign size={10} />
-            Total Collected
-          </div>
-          <div className="df-metric-value text-num" style={{ color: 'var(--green)' }}>{money(totalCollected)}</div>
-          <div className="df-metric-sub">across all invoices</div>
+      <section className="ops-secondary-strip ops-secondary-strip-compact">
+        <div className="ops-strip-primary">
+          <span>Total collected</span>
+          <strong>{moneyCents(totalCollected)}</strong>
+          <small>{rows.length} payment{rows.length === 1 ? '' : 's'} recorded</small>
         </div>
-      )}
+      </section>
 
-      <div className="df-card">
+      <section className="ops-panel">
+        <div className="ops-panel-header">
+          <div>
+            <p className="ops-eyebrow">Receipts</p>
+            <h2>Payment ledger</h2>
+          </div>
+        </div>
+
         {rows.length === 0 ? (
           <div className="df-empty">
-            <DollarSign size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <CreditCard size={28} />
             <div className="df-empty-title">No payments recorded</div>
             <div className="df-empty-desc">Payments appear here after you record them on invoices.</div>
           </div>
         ) : (
-          <table className="df-table">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-                <th>Method</th>
-                <th>Reference</th>
-                <th>Paid At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p._id}>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 13 }}>{p.invoiceNo}</span>
-                  </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--green)' }}>
-                    {money(p.amount_cents)}
-                  </td>
-                  <td style={{ textTransform: 'capitalize', color: 'var(--text-secondary)' }}>{p.method}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    {p.reference || '—'}
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                    {new Date(p.paid_at).toLocaleString()}
-                  </td>
+          <div className="ops-table-wrap">
+            <table className="df-table ops-table ops-finance-table">
+              <thead>
+                <tr>
+                  <th>Reference</th>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th className="num">Amount</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th>Paid at</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((payment) => (
+                  <tr key={payment._id}>
+                    <td>
+                      <strong>{payment.reference || `...${payment._id.slice(-8)}`}</strong>
+                    </td>
+                    <td>{payment.invoiceNo}</td>
+                    <td>{customerLabel(payment.customer)}</td>
+                    <td className="num">{moneyCents(payment.amount_cents)}</td>
+                    <td>{payment.method}</td>
+                    <td>
+                      <span className="status-badge status-paid">Recorded</span>
+                    </td>
+                    <td>{formatDateTime(payment.paid_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

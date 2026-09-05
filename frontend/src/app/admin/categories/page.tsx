@@ -38,11 +38,12 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Product Categories</h1>
-          <p className="df-page-subtitle">Category discount ceilings govern product-level discount rules</p>
+          <p className="admin-eyebrow">Sales</p>
+          <h1>Product Categories</h1>
+          <p>Category discount ceilings govern product-level discount rules.</p>
         </div>
         {canManage && (
           <button onClick={() => setShowModal(true)} className="btn btn-primary">
@@ -59,7 +60,7 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {categories.length === 0 ? (
           <div className="df-empty">
             <ListFilter size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />

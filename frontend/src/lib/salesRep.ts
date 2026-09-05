@@ -20,11 +20,13 @@ export type LastActivity = {
 
 export type QuotationListItem = {
   id: string;
+  _id?: string;
   quotationId?: string;
   quoteNumber: string;
   status: string;
   total?: number;
   amount?: number;
+  grandTotal?: number;
   approvalStatus?: string;
   approvalState?: string;
   riskSeverity?: string;

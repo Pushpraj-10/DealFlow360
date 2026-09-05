@@ -43,11 +43,12 @@ export default function WarehousesPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Warehouses</h1>
-          <p className="df-page-subtitle">{warehouses.length} warehouse{warehouses.length !== 1 ? 's' : ''} configured</p>
+          <p className="admin-eyebrow">Operations</p>
+          <h1>Warehouses</h1>
+          <p>{warehouses.length} warehouse{warehouses.length !== 1 ? 's' : ''} configured.</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={13} />
@@ -62,7 +63,7 @@ export default function WarehousesPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {warehouses.length === 0 ? (
           <div className="df-empty">
             <Warehouse size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />

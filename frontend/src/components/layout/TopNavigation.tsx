@@ -66,6 +66,7 @@ const navByRole: Record<string, NavItem[]> = {
     { label: 'Overview', href: '/', icon: <LayoutDashboard size={15} /> },
     { label: 'Quotations', href: '/sales/quotations', icon: <FileText size={15} /> },
     { label: 'Approvals', href: '/sales/approvals', icon: <CheckSquare size={15} /> },
+    { label: 'Team Deals', href: '/sales/team-deals', icon: <Columns3 size={15} /> },
     { label: 'Customers', href: '/admin/customers', icon: <Users size={15} /> },
     { label: 'Products', href: '/admin/products', icon: <Package size={15} /> },
     { label: 'Fulfillment', href: '/operations/fulfillment', icon: <Truck size={15} /> },

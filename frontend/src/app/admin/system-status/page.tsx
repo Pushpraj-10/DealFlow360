@@ -27,11 +27,12 @@ export default function SystemStatusPage() {
   }, []);
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">System Status</h1>
-          <p className="df-page-subtitle">Backend module availability and stub readiness</p>
+          <p className="admin-eyebrow">Overview</p>
+          <h1>System Status</h1>
+          <p>Backend module availability and stub readiness.</p>
         </div>
       </div>
 
@@ -50,7 +51,7 @@ export default function SystemStatusPage() {
         These modules expose a &ldquo;ready&rdquo; status endpoint only — the underlying business logic hasn&apos;t been implemented yet. No UI is built against them to avoid presenting non-existent functionality.
       </div>
 
-      <div className="df-card">
+      <div className="admin-panel">
         <table className="df-table">
           <thead>
             <tr>

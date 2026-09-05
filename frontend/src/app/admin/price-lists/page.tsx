@@ -61,11 +61,12 @@ export default function PriceListsPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Price Lists</h1>
-          <p className="df-page-subtitle">Tier-specific pricing for products in quotations</p>
+          <p className="admin-eyebrow">Sales</p>
+          <h1>Price Lists</h1>
+          <p>Tier-specific pricing for products in quotations.</p>
         </div>
         {canManage && (
           <button onClick={() => setShowModal(true)} className="btn btn-primary">
@@ -82,7 +83,7 @@ export default function PriceListsPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {priceLists.length === 0 ? (
           <div className="df-empty">
             <BadgePercent size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />

@@ -50,11 +50,12 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Sales Reports</h1>
-          <p className="df-page-subtitle">Quotation performance, net value, and discount analytics</p>
+          <p className="admin-eyebrow">Insights</p>
+          <h1>Sales Reports</h1>
+          <p>Quotation performance, net value, and discount analytics.</p>
         </div>
         <button onClick={handleExport} className="btn btn-secondary" style={{ gap: 7 }}>
           <Download size={13} />
@@ -70,7 +71,7 @@ export default function ReportsPage() {
       )}
 
       {/* Period filter */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+      <div className="admin-filter-row">
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Period:</span>
         {['all', 'today', 'week'].map((p) => (
           <button
@@ -96,7 +97,7 @@ export default function ReportsPage() {
       {report && (
         <>
           {/* Summary metrics */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+          <div className="admin-metric-row">
             <div className="df-metric">
               <div className="df-metric-label">Quotations</div>
               <div className="df-metric-value text-num">{report.summary.totalQuotations}</div>
@@ -123,8 +124,8 @@ export default function ReportsPage() {
           </div>
 
           {/* Row table */}
-          <div className="df-card">
-            <div className="df-card-header">
+          <div className="admin-panel">
+            <div className="admin-panel-header">
               <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600 }}>
                 <BarChart2 size={14} color="var(--accent)" />
                 Quotation Breakdown

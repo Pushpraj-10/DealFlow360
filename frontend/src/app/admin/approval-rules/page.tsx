@@ -68,11 +68,12 @@ export default function ApprovalRulesPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Approval Rules</h1>
-          <p className="df-page-subtitle">Define which risk bands require approval and who approves them</p>
+          <p className="admin-eyebrow">Governance</p>
+          <h1>Approval Rules</h1>
+          <p>Define which risk bands require approval and who approves them.</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={13} />
@@ -87,7 +88,7 @@ export default function ApprovalRulesPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {rules.length === 0 ? (
           <div className="df-empty">
             <FileCheck size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
@@ -101,7 +102,7 @@ export default function ApprovalRulesPage() {
                 <th>Rule Name</th>
                 <th>Risk Range</th>
                 <th>Severity</th>
-                <th>Required Approvers</th>
+                <th>Approval Flow</th>
               </tr>
             </thead>
             <tbody>
@@ -115,14 +116,18 @@ export default function ApprovalRulesPage() {
                     <span className={`risk-badge ${getSeverityClass(r.severity)}`}>{r.severity}</span>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    <div className="admin-approval-flow">
                       {r.requiredApprovalRoles.length === 0 ? (
                         <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>None</span>
                       ) : (
-                        r.requiredApprovalRoles.map((role) => (
-                          <span key={role} style={{ fontSize: 11, background: 'var(--surface-02)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 99, color: 'var(--text-secondary)' }}>
-                            {role.replace('_', ' ')}
-                          </span>
+                        r.requiredApprovalRoles.map((role, index) => (
+                          <React.Fragment key={role}>
+                            <span>
+                              <em>{index + 1}</em>
+                              {role.replace('_', ' ')}
+                            </span>
+                            {index < r.requiredApprovalRoles.length - 1 && <b>-&gt;</b>}
+                          </React.Fragment>
                         ))
                       )}
                     </div>

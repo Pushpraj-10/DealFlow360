@@ -13,6 +13,9 @@ type Product = {
   billingType: string;
   basePrice: number;
   costPrice: number;
+  taxPercentage?: number;
+  isActive?: boolean;
+  status?: string;
   isStockManaged: boolean;
 };
 type Variant = { _id: string; sku: string; extraPrice: number };
@@ -96,11 +99,12 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Product Catalog</h1>
-          <p className="df-page-subtitle">{products.length} product{products.length !== 1 ? 's' : ''} in catalog</p>
+          <p className="admin-eyebrow">Sales</p>
+          <h1>Product Catalog</h1>
+          <p>{products.length} product{products.length !== 1 ? 's' : ''} in catalog</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn btn-primary">
           <Plus size={13} />
@@ -115,7 +119,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {products.length === 0 ? (
           <div className="df-empty">
             <Package size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
@@ -129,16 +133,20 @@ export default function ProductsPage() {
                 <th>Product</th>
                 <th>Category</th>
                 <th>Type</th>
-                <th>Billing</th>
-                <th style={{ textAlign: 'right' }}>Base Price</th>
-                <th style={{ textAlign: 'center' }}>Stock</th>
+                <th style={{ textAlign: 'right' }}>Price</th>
+                <th style={{ textAlign: 'right' }}>Cost</th>
+                <th style={{ textAlign: 'right' }}>Tax</th>
+                <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {products.map((p) => (
                 <tr key={p._id}>
-                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td>
+                    <strong>{p.name}</strong>
+                    <small>{p.isStockManaged ? 'Stock-managed' : 'Non-stock item'}</small>
+                  </td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                     {typeof p.categoryId === 'object' ? p.categoryId.name : p.categoryId}
                   </td>
@@ -147,21 +155,22 @@ export default function ProductsPage() {
                       {p.productType}
                     </span>
                   </td>
-                  <td><BillingBadge type={p.billingType} /></td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
                     ${p.basePrice.toFixed(2)}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: p.isStockManaged ? 'var(--green)' : 'var(--border-strong)',
-                      }}
-                      title={p.isStockManaged ? 'Stock managed' : 'Not stock managed'}
-                    />
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                    ${p.costPrice.toFixed(2)}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                    {p.taxPercentage ?? 0}%
+                  </td>
+                  <td>
+                    <div className="admin-product-status">
+                      <BillingBadge type={p.billingType} />
+                      <span className={`status-badge ${p.isActive === false || p.status === 'INACTIVE' ? 'status-cancelled' : 'status-active'}`}>
+                        {p.isActive === false || p.status === 'INACTIVE' ? 'Inactive' : 'Active'}
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <button

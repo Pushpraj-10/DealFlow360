@@ -7,11 +7,20 @@ import { AlertCircle, Boxes } from 'lucide-react';
 type Inventory = {
   _id: string;
   sku: string;
+  product?: { _id?: string; name?: string } | string;
+  product_id?: { _id?: string; name?: string } | string;
   on_hand: number;
   reserved: number;
   available: number;
   warehouse_id: { _id: string; name: string } | string;
 };
+
+function productName(row: Inventory) {
+  const product = row.product || row.product_id;
+  if (typeof product === 'object' && product?.name) return product.name;
+  if (typeof product === 'string') return `...${product.slice(-8)}`;
+  return row.sku;
+}
 
 export default function InventoryPage() {
   const [rows, setRows] = useState<Inventory[]>([]);
@@ -27,11 +36,12 @@ export default function InventoryPage() {
   }, []);
 
   return (
-    <div className="df-page">
-      <div className="df-page-header">
+    <div className="admin-page">
+      <div className="admin-page-header">
         <div>
-          <h1 className="df-page-title">Inventory</h1>
-          <p className="df-page-subtitle">{rows.length} SKU{rows.length !== 1 ? 's' : ''} across all warehouses</p>
+          <p className="admin-eyebrow">Operations</p>
+          <h1>Inventory</h1>
+          <p>{rows.length} SKU{rows.length !== 1 ? 's' : ''} across all warehouses</p>
         </div>
       </div>
 
@@ -42,7 +52,7 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <div className="df-card">
+      <div className="admin-panel">
         {rows.length === 0 ? (
           <div className="df-empty">
             <Boxes size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
@@ -54,6 +64,7 @@ export default function InventoryPage() {
             <thead>
               <tr>
                 <th>SKU</th>
+                <th>Product</th>
                 <th>Warehouse</th>
                 <th style={{ textAlign: 'right' }}>On Hand</th>
                 <th style={{ textAlign: 'right' }}>Reserved</th>
@@ -70,6 +81,7 @@ export default function InventoryPage() {
                         {inv.sku}
                       </span>
                     </td>
+                    <td style={{ fontWeight: 600 }}>{productName(inv)}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>
                       {typeof inv.warehouse_id === 'object'
                         ? inv.warehouse_id.name
