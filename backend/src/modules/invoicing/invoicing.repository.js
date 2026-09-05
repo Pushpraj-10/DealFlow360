@@ -5,7 +5,7 @@ import { CreditNote } from './credit-note.model.js';
 import { FulfillmentAllocation } from '../fulfillment/fulfillment-allocation.model.js';
 import { Fulfillment } from '../fulfillment/fulfillment.model.js';
 import { Subscription } from '../subscriptions/subscription.model.js';
-import { Quotation } from '../_shared/placeholders/quotation.model.js';
+import { Quotation } from '../quotations/quotation.model.js';
 
 const findInvoices = (filter = {}) => Invoice.find(filter).sort({ created_at: -1 });
 
@@ -41,7 +41,7 @@ const updateInvoice = (id, data) => Invoice.findByIdAndUpdate(id, data, { new: t
 
 const findAllocationById = (id) => FulfillmentAllocation.findById(id).populate({
     path: 'quote_line_id',
-    populate: { path: 'product_id' },
+    populate: ['productId', 'variantId'],
 });
 
 const findSubscriptionById = (id) => Subscription.findById(id);

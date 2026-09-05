@@ -54,6 +54,15 @@ const productSchema = new Schema(
             default: true,
             index: true
         },
+        // Added for the fulfillment/inventory scope: whether this product is
+        // a physical good that flows through warehouse allocation, or a
+        // service/subscription that bypasses it entirely. Additive field -
+        // does not affect any existing behavior.
+        isStockManaged: {
+            type: Boolean,
+            default: true,
+            index: true
+        },
         status: {
             type: String,
             enum: Object.values(PRODUCT_STATUSES),

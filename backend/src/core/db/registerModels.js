@@ -7,12 +7,21 @@
  * every model is registered before any request is handled, regardless of
  * which feature module happens to run first.
  */
-import '../../modules/auth/user.model.js';
-import '../../modules/_shared/audit-log/audit-log.model.js';
-import '../../modules/_shared/placeholders/customer.model.js';
-import '../../modules/_shared/placeholders/product.model.js';
-import '../../modules/_shared/placeholders/quotation.model.js';
-import '../../modules/_shared/placeholders/quotation-line.model.js';
+import '../../modules/users/user.model.js';
+import '../../modules/customers/customer.model.js';
+import '../../modules/customerTiers/customerTier.model.js';
+import '../../modules/categories/category.model.js';
+import '../../modules/products/product.model.js';
+import '../../modules/products/productVariant.model.js';
+import '../../modules/priceLists/priceList.model.js';
+import '../../modules/discountRules/discountRule.model.js';
+import '../../modules/quotations/quotation.model.js';
+import '../../modules/quotationLines/quotationLine.model.js';
+import '../../modules/approvals/approval.model.js';
+import '../../modules/approvals/approvalRule.model.js';
+import '../../modules/negotiations/negotiation.model.js';
+import '../../modules/recommendations/recommendationRule.model.js';
+import '../../modules/auditLogs/auditLog.model.js';
 import '../../modules/warehouses/warehouse.model.js';
 import '../../modules/inventory/inventory.model.js';
 import '../../modules/fulfillment/fulfillment.model.js';

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middleware/auth.middleware.js';
+import { authenticate } from '../../core/middlewares/auth.middleware.js';
 import {
     listPlans,
     createPlan,
@@ -14,7 +14,7 @@ import {
 // Mounted at the API root in app.js since this feature spans three
 // resource prefixes (/subscription-plans, /subscriptions, /billing).
 const router = Router();
-router.use(requireAuth);
+router.use(authenticate);
 
 router.get('/subscription-plans', listPlans);
 router.post('/subscription-plans', createPlan);

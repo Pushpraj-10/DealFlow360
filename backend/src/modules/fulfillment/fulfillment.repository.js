@@ -1,7 +1,7 @@
 import { Fulfillment } from './fulfillment.model.js';
 import { FulfillmentAllocation } from './fulfillment-allocation.model.js';
 import { Backorder } from './backorder.model.js';
-import { QuotationLine } from '../_shared/placeholders/quotation-line.model.js';
+import { QuotationLine } from '../quotationLines/quotationLine.model.js';
 import { Warehouse } from '../warehouses/warehouse.model.js';
 import { Inventory } from '../inventory/inventory.model.js';
 
@@ -17,9 +17,9 @@ const updateFulfillmentStatus = (id, status, extra = {}, session) =>
     Fulfillment.findByIdAndUpdate(id, { status, ...extra }, { new: true, session });
 
 const findQuoteLinesByQuotationId = (quotationId) =>
-    QuotationLine.find({ quotation_id: quotationId }).populate('product_id');
+    QuotationLine.find({ quotationId }).populate('productId').populate('variantId');
 
-const findQuoteLineById = (id) => QuotationLine.findById(id).populate('product_id');
+const findQuoteLineById = (id) => QuotationLine.findById(id).populate('productId').populate('variantId');
 
 const findActiveWarehouses = () => Warehouse.find({ active: true }).sort({ shipping_cost_weight: 1 });
 
@@ -49,7 +49,7 @@ const createBackorders = (rows) => Backorder.insertMany(rows);
 const findAllocationsByFulfillmentId = (fulfillmentId, session) => {
     const query = FulfillmentAllocation.find({ fulfillment_id: fulfillmentId }).populate({
         path: 'quote_line_id',
-        populate: { path: 'product_id' },
+        populate: ['productId', 'variantId'],
     });
     return session ? query.session(session) : query;
 };
@@ -57,7 +57,7 @@ const findAllocationsByFulfillmentId = (fulfillmentId, session) => {
 const findAllocationById = (id, session) => {
     const query = FulfillmentAllocation.findById(id).populate({
         path: 'quote_line_id',
-        populate: { path: 'product_id' },
+        populate: ['productId', 'variantId'],
     });
     return session ? query.session(session) : query;
 };

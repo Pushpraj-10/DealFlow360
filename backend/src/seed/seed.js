@@ -1,18 +1,23 @@
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import '../core/config/env.js';
 import connectDB from '../core/db/index.js';
+import { USER_ROLES, QUOTATION_STATUSES } from '../core/constants.js';
+import { hashPassword } from '../modules/auth/auth.service.js';
 
-import { User } from '../modules/auth/user.model.js';
-import { Customer } from '../modules/_shared/placeholders/customer.model.js';
-import { Product } from '../modules/_shared/placeholders/product.model.js';
-import { Quotation } from '../modules/_shared/placeholders/quotation.model.js';
-import { QuotationLine } from '../modules/_shared/placeholders/quotation-line.model.js';
+import { User } from '../modules/users/user.model.js';
+import { Customer } from '../modules/customers/customer.model.js';
+import { CustomerTier } from '../modules/customerTiers/customerTier.model.js';
+import { Category } from '../modules/categories/category.model.js';
+import { Product } from '../modules/products/product.model.js';
+import { ProductVariant } from '../modules/products/productVariant.model.js';
+import { Quotation } from '../modules/quotations/quotation.model.js';
+import { QuotationLine } from '../modules/quotationLines/quotationLine.model.js';
 import { Warehouse } from '../modules/warehouses/warehouse.model.js';
 import { Inventory } from '../modules/inventory/inventory.model.js';
 import { SubscriptionPlan } from '../modules/subscriptions/subscription-plan.model.js';
 import { Subscription } from '../modules/subscriptions/subscription.model.js';
 
-dotenv.config({ path: './.env', quiet: true });
+const SEED_PASSWORD = 'Password123!';
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
@@ -26,11 +31,72 @@ const lastOfMonthUTC = () => {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59));
 };
 
+/**
+ * dhan's QuotationLine schema requires every derived commercial field
+ * up-front (no defaults) - this fills them all consistently from a small
+ * set of inputs so seeded lines pass validation.
+ */
+const buildQuotationLine = ({
+    quotationId,
+    productId,
+    variantId = null,
+    lineType,
+    quantity,
+    unitPrice,
+    costPrice,
+    discountPercent,
+    taxPercentage,
+    allowedDiscountPercent,
+    description,
+}) => {
+    const lineSubtotal = quantity * unitPrice;
+    const discountAmount = Math.round(lineSubtotal * (discountPercent / 100) * 100) / 100;
+    const revenueAfterDiscount = lineSubtotal - discountAmount;
+    const tax = Math.round(revenueAfterDiscount * (taxPercentage / 100) * 100) / 100;
+    const lineTotal = revenueAfterDiscount + tax;
+    const totalCost = quantity * costPrice;
+    const marginAmount = revenueAfterDiscount - totalCost;
+    const marginPercentage = revenueAfterDiscount > 0 ? (marginAmount / revenueAfterDiscount) * 100 : 0;
+    const excessDiscount = Math.max(0, discountPercent - allowedDiscountPercent);
+
+    return {
+        quotationId,
+        productId,
+        variantId,
+        lineType,
+        quantity,
+        unitPrice,
+        costPrice,
+        discountPercent,
+        taxPercentage,
+        tax,
+        lineSubtotal,
+        discountAmount,
+        revenueAfterDiscount,
+        totalCost,
+        lineTotal,
+        margin: marginPercentage,
+        marginAmount,
+        grossMarginAmount: marginAmount,
+        marginPercentage,
+        allowedDiscountPercent,
+        allowed_discount: allowedDiscountPercent,
+        actual_discount: discountPercent,
+        excess_discount: excessDiscount,
+        is_violation: excessDiscount > 0,
+        violationAmount: Math.round(lineSubtotal * (excessDiscount / 100) * 100) / 100,
+        description,
+    };
+};
+
 const wipe = async () => {
     await Promise.all([
         User.deleteMany({}),
         Customer.deleteMany({}),
+        CustomerTier.deleteMany({}),
+        Category.deleteMany({}),
         Product.deleteMany({}),
+        ProductVariant.deleteMany({}),
         Quotation.deleteMany({}),
         QuotationLine.deleteMany({}),
         Warehouse.deleteMany({}),
@@ -45,51 +111,79 @@ const run = async () => {
     console.log('Resetting DealFlow360 demo collections...');
     await wipe();
 
+    const passwordHash = hashPassword(SEED_PASSWORD);
     const [rep, ops, admin] = await User.create([
-        { name: 'Sam Rep', email: 'rep@dealflow360.dev', role: 'sales_rep', team: 'east' },
-        { name: 'Olivia Ops', email: 'ops@dealflow360.dev', role: 'finance_ops', team: 'east' },
-        { name: 'Alex Admin', email: 'admin@dealflow360.dev', role: 'admin', team: 'east' },
+        { fullName: 'Sam Rep', email: 'rep@dealflow360.dev', passwordHash, role: USER_ROLES.SALES_REP, team: 'east' },
+        { fullName: 'Olivia Ops', email: 'ops@dealflow360.dev', passwordHash, role: USER_ROLES.FINANCE, team: 'east' },
+        { fullName: 'Alex Admin', email: 'admin@dealflow360.dev', passwordHash, role: USER_ROLES.ADMIN, team: 'east' },
+    ]);
+
+    const [goldTier, silverTier] = await CustomerTier.create([
+        { name: 'Gold', defaultMaxDiscountPercent: 15 },
+        { name: 'Silver', defaultMaxDiscountPercent: 10 },
     ]);
 
     const [acme, beta] = await Customer.create([
-        { name: 'Acme Corp', tier: 'Gold', currency_code: 'USD', email: 'buyer@acme.test' },
-        { name: 'Beta Industries', tier: 'Silver', currency_code: 'USD', email: 'buyer@beta.test' },
+        { name: 'Acme Corp', tierId: goldTier._id, email: 'buyer@acme.test', company: 'Acme Corp' },
+        { name: 'Beta Industries', tierId: silverTier._id, email: 'buyer@beta.test', company: 'Beta Industries' },
+    ]);
+
+    const [hardwareCategory, subscriptionCategory, servicesCategory] = await Category.create([
+        { name: 'Hardware', maxAllowedDiscountPercent: 15 },
+        { name: 'Subscription', maxAllowedDiscountPercent: 15 },
+        { name: 'Services', maxAllowedDiscountPercent: 10 },
     ]);
 
     const [laptop, dock, carePlan, onsiteSetup] = await Product.create([
         {
-            sku: 'LAPTOP-PRO-14',
             name: 'Laptop Pro 14"',
-            category: 'Hardware',
-            base_price_cents: 120000,
-            unit_cost_cents: 85000,
-            is_stock_managed: true,
+            categoryId: hardwareCategory._id,
+            productType: 'Hardware',
+            billingType: 'ONE_TIME',
+            basePrice: 1200,
+            costPrice: 850,
+            taxPercentage: 5,
+            unit: 'unit',
+            isStockManaged: true,
         },
         {
-            sku: 'DOCK-STATION',
             name: 'Dock Station',
-            category: 'Hardware',
-            base_price_cents: 18000,
-            unit_cost_cents: 12000,
-            is_stock_managed: true,
+            categoryId: hardwareCategory._id,
+            productType: 'Hardware',
+            billingType: 'ONE_TIME',
+            basePrice: 180,
+            costPrice: 120,
+            taxPercentage: 5,
+            unit: 'unit',
+            isStockManaged: true,
         },
         {
-            sku: 'CARE-PLAN-2YR',
             name: 'Care Plan (2yr)',
-            category: 'Subscription',
-            base_price_cents: 4600,
-            unit_cost_cents: 1000,
-            is_subscription: true,
-            is_stock_managed: false,
+            categoryId: subscriptionCategory._id,
+            productType: 'Subscription',
+            billingType: 'RECURRING',
+            basePrice: 46,
+            costPrice: 10,
+            taxPercentage: 0,
+            unit: 'plan',
+            isStockManaged: false,
         },
         {
-            sku: 'ONSITE-SETUP',
             name: 'Onsite Setup Service',
-            category: 'Services',
-            base_price_cents: 25000,
-            unit_cost_cents: 5000,
-            is_stock_managed: false,
+            categoryId: servicesCategory._id,
+            productType: 'Service',
+            billingType: 'ONE_TIME',
+            basePrice: 250,
+            costPrice: 50,
+            taxPercentage: 0,
+            unit: 'service',
+            isStockManaged: false,
         },
+    ]);
+
+    const [laptopVariant, dockVariant] = await ProductVariant.create([
+        { productId: laptop._id, sku: 'LAPTOP-PRO-14', name: 'Standard', extraPrice: 0 },
+        { productId: dock._id, sku: 'DOCK-STATION', name: 'Standard', extraPrice: 0 },
     ]);
 
     const [mainWarehouse, eastDepot] = await Warehouse.create([
@@ -117,89 +211,115 @@ const run = async () => {
     // DOCK-STATION line used for the ship-50%/invoice-50% test (Scenario 3),
     // plus a recurring line for the proration test (Scenario 2).
     const quoteDemo1 = await Quotation.create({
-        quote_no: 'Q-DEMO-1',
-        customer_id: acme._id,
-        owner_id: rep._id,
-        status: 'confirmed',
-        requested_delivery_date: daysAgo(-14),
-        last_activity_at: new Date(),
+        quoteNumber: 'Q-DEMO-1',
+        customerId: acme._id,
+        salesRepId: rep._id,
+        ownerId: rep._id,
+        status: QUOTATION_STATUSES.CONFIRMED,
+        requestedDeliveryDate: daysAgo(-14),
     });
     const [laptopLine, dockLine, carePlanLine] = await QuotationLine.create([
-        {
-            quotation_id: quoteDemo1._id,
-            product_id: laptop._id,
-            qty: 25,
-            unit_price_cents: laptop.base_price_cents,
-            discount_pct: 8,
-            tax_pct: 5,
-            billing_type: 'one_time_stock',
-        },
-        {
-            quotation_id: quoteDemo1._id,
-            product_id: dock._id,
-            qty: 10,
-            unit_price_cents: dock.base_price_cents,
-            discount_pct: 5,
-            tax_pct: 5,
-            billing_type: 'one_time_stock',
-        },
-        {
-            quotation_id: quoteDemo1._id,
-            product_id: carePlan._id,
-            qty: 1,
-            unit_price_cents: carePlan.base_price_cents,
-            discount_pct: 0,
-            tax_pct: 0,
-            billing_type: 'recurring',
-        },
+        buildQuotationLine({
+            quotationId: quoteDemo1._id,
+            productId: laptop._id,
+            variantId: laptopVariant._id,
+            lineType: 'ONE_TIME',
+            quantity: 25,
+            unitPrice: laptop.basePrice,
+            costPrice: laptop.costPrice,
+            discountPercent: 8,
+            taxPercentage: laptop.taxPercentage,
+            allowedDiscountPercent: hardwareCategory.maxAllowedDiscountPercent,
+            description: laptop.name,
+        }),
+        buildQuotationLine({
+            quotationId: quoteDemo1._id,
+            productId: dock._id,
+            variantId: dockVariant._id,
+            lineType: 'ONE_TIME',
+            quantity: 10,
+            unitPrice: dock.basePrice,
+            costPrice: dock.costPrice,
+            discountPercent: 5,
+            taxPercentage: dock.taxPercentage,
+            allowedDiscountPercent: hardwareCategory.maxAllowedDiscountPercent,
+            description: dock.name,
+        }),
+        buildQuotationLine({
+            quotationId: quoteDemo1._id,
+            productId: carePlan._id,
+            lineType: 'RECURRING',
+            quantity: 1,
+            unitPrice: carePlan.basePrice,
+            costPrice: carePlan.costPrice,
+            discountPercent: 0,
+            taxPercentage: carePlan.taxPercentage,
+            allowedDiscountPercent: subscriptionCategory.maxAllowedDiscountPercent,
+            description: carePlan.name,
+        }),
     ]);
 
-    // Q-DEMO-2: stalled-deal trigger (idle for 9 days, still open).
-    await Quotation.create({
-        quote_no: 'Q-DEMO-2',
-        customer_id: beta._id,
-        owner_id: rep._id,
-        status: 'sent',
-        requested_delivery_date: daysAgo(-3),
-        last_activity_at: daysAgo(9),
+    // Q-DEMO-2: stalled-deal trigger (idle for 9 days, still open) and
+    // delivery-slippage trigger (requested in 3 days, well inside lead time).
+    const quoteDemo2 = await Quotation.create({
+        quoteNumber: 'Q-DEMO-2',
+        customerId: beta._id,
+        salesRepId: rep._id,
+        ownerId: rep._id,
+        status: QUOTATION_STATUSES.APPROVED,
+        requestedDeliveryDate: daysAgo(-3),
     });
+    // Force updatedAt into the past without Mongoose's auto-timestamp
+    // overwriting it, so the stalled-deal rule (driven off updatedAt) fires.
+    await Quotation.updateOne({ _id: quoteDemo2._id }, { $set: { updatedAt: daysAgo(9) } }, { timestamps: false });
 
     // Rep discount history (5-8%) plus one 25% outlier -> discount-anomaly trigger.
     for (const discount of [5, 6, 8]) {
         const historicalQuote = await Quotation.create({
-            quote_no: `Q-HIST-${discount}`,
-            customer_id: beta._id,
-            owner_id: rep._id,
-            status: 'confirmed',
-            last_activity_at: new Date(),
+            quoteNumber: `Q-HIST-${discount}`,
+            customerId: beta._id,
+            salesRepId: rep._id,
+            ownerId: rep._id,
+            status: QUOTATION_STATUSES.CONFIRMED,
         });
-        await QuotationLine.create({
-            quotation_id: historicalQuote._id,
-            product_id: dock._id,
-            qty: 5,
-            unit_price_cents: dock.base_price_cents,
-            discount_pct: discount,
-            tax_pct: 5,
-            billing_type: 'one_time_stock',
-        });
+        await QuotationLine.create(
+            buildQuotationLine({
+                quotationId: historicalQuote._id,
+                productId: dock._id,
+                variantId: dockVariant._id,
+                lineType: 'ONE_TIME',
+                quantity: 5,
+                unitPrice: dock.basePrice,
+                costPrice: dock.costPrice,
+                discountPercent: discount,
+                taxPercentage: dock.taxPercentage,
+                allowedDiscountPercent: hardwareCategory.maxAllowedDiscountPercent,
+                description: dock.name,
+            })
+        );
     }
 
     const quoteDemo3 = await Quotation.create({
-        quote_no: 'Q-DEMO-3',
-        customer_id: beta._id,
-        owner_id: rep._id,
-        status: 'pending_approval',
-        last_activity_at: new Date(),
+        quoteNumber: 'Q-DEMO-3',
+        customerId: beta._id,
+        salesRepId: rep._id,
+        ownerId: rep._id,
+        status: QUOTATION_STATUSES.PENDING_APPROVAL,
     });
-    await QuotationLine.create({
-        quotation_id: quoteDemo3._id,
-        product_id: onsiteSetup._id,
-        qty: 2,
-        unit_price_cents: onsiteSetup.base_price_cents,
-        discount_pct: 25,
-        tax_pct: 0,
-        billing_type: 'one_time_service',
-    });
+    await QuotationLine.create(
+        buildQuotationLine({
+            quotationId: quoteDemo3._id,
+            productId: onsiteSetup._id,
+            lineType: 'ONE_TIME',
+            quantity: 2,
+            unitPrice: onsiteSetup.basePrice,
+            costPrice: onsiteSetup.costPrice,
+            discountPercent: 25,
+            taxPercentage: onsiteSetup.taxPercentage,
+            allowedDiscountPercent: servicesCategory.maxAllowedDiscountPercent,
+            description: onsiteSetup.name,
+        })
+    );
 
     // Active mid-period subscription for the proration test (Scenario 2).
     const subscription = await Subscription.create({
@@ -218,29 +338,30 @@ const run = async () => {
     console.log('\nSeed complete. Reference IDs:\n');
     console.table([
         { what: 'User (rep)', id: rep._id.toString(), email: rep.email },
-        { what: 'User (ops)', id: ops._id.toString(), email: ops.email },
+        { what: 'User (ops/finance)', id: ops._id.toString(), email: ops.email },
         { what: 'User (admin)', id: admin._id.toString(), email: admin.email },
-        { what: 'Customer (Acme)', id: acme._id.toString() },
-        { what: 'Customer (Beta)', id: beta._id.toString() },
+        { what: 'Customer (Acme, Gold)', id: acme._id.toString() },
+        { what: 'Customer (Beta, Silver)', id: beta._id.toString() },
         { what: 'Warehouse (Main)', id: mainWarehouse._id.toString() },
         { what: 'Warehouse (East)', id: eastDepot._id.toString() },
         { what: 'Quotation Q-DEMO-1', id: quoteDemo1._id.toString() },
         { what: '  - LAPTOP-PRO-14 line (qty 25)', id: laptopLine._id.toString() },
         { what: '  - DOCK-STATION line (qty 10)', id: dockLine._id.toString() },
         { what: '  - CARE-PLAN-2YR line (recurring)', id: carePlanLine._id.toString() },
-        { what: 'Quotation Q-DEMO-2 (stalled)', id: 'see quote_no Q-DEMO-2' },
+        { what: 'Quotation Q-DEMO-2 (stalled + slippage)', id: quoteDemo2._id.toString() },
         { what: 'Quotation Q-DEMO-3 (anomaly)', id: quoteDemo3._id.toString() },
         { what: 'Subscription (Care Plan, active mid-period)', id: subscription._id.toString() },
         { what: 'SubscriptionPlan (Care Plan Monthly)', id: carePlanMonthly._id.toString() },
     ]);
 
-    console.log('\nGet a dev token:');
+    console.log(`\nAll seed users share the password: ${SEED_PASSWORD}`);
+    console.log('\nLog in:');
     console.log(
-        `  curl -X POST http://localhost:${process.env.PORT || 8001}/api/v1/auth/dev-token -H "Content-Type: application/json" -d '{"email":"ops@dealflow360.dev"}'`
+        `  curl -X POST http://localhost:${process.env.PORT || 8001}/api/v1/auth/login -H "Content-Type: application/json" -d '{"email":"ops@dealflow360.dev","password":"${SEED_PASSWORD}"}'`
     );
     console.log('\nThen, e.g.:');
     console.log(
-        `  curl -X POST http://localhost:${process.env.PORT || 8001}/api/v1/fulfillments -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"quotation_id":"${quoteDemo1._id}"}'`
+        `  curl -X POST http://localhost:${process.env.PORT || 8001}/api/v1/fulfillments -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" -d '{"quotation_id":"${quoteDemo1._id}"}'`
     );
 
     await mongoose.disconnect();

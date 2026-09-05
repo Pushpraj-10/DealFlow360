@@ -59,19 +59,23 @@ const generateShipmentInvoice = async ({ fulfillment_allocation_id }, actorId) =
     }
 
     const quoteLine = allocation.quote_line_id;
-    const product = quoteLine.product_id;
+    const product = quoteLine.productId;
+    const variant = quoteLine.variantId;
 
     const fulfillment = await invoicingRepository.findFulfillmentById(allocation.fulfillment_id);
     const quotation = await invoicingRepository.findQuotationById(fulfillment.quotation_id);
 
-    const netUnitPriceCents = Math.round(quoteLine.unit_price_cents * (1 - quoteLine.discount_pct / 100));
+    // dhan's QuotationLine stores money as plain decimal dollars; convert to
+    // integer cents at this read boundary, per PRD NFR-006.
+    const unitPriceCents = Math.round(quoteLine.unitPrice * 100);
+    const netUnitPriceCents = Math.round(unitPriceCents * (1 - quoteLine.discountPercent / 100));
     const amountCents = netUnitPriceCents * invoiceableQty;
-    const taxCents = Math.round((amountCents * (quoteLine.tax_pct || 0)) / 100);
+    const taxCents = Math.round((amountCents * (quoteLine.taxPercentage || 0)) / 100);
 
     const { invoice } = await invoicingRepository.createInvoiceWithLine(
         {
             invoice_no: invoiceNo('INV-SHP'),
-            customer_id: quotation.customer_id,
+            customer_id: quotation.customerId,
             quotation_id: quotation._id,
             status: 'UNPAID',
             due_date: dueDate(),
@@ -82,7 +86,7 @@ const generateShipmentInvoice = async ({ fulfillment_allocation_id }, actorId) =
         {
             source_type: 'shipment',
             source_id: allocation._id,
-            description: `${product?.name || product?.sku || 'Item'} - shipped qty ${invoiceableQty}`,
+            description: `${product?.name || variant?.sku || 'Item'} - shipped qty ${invoiceableQty}`,
             qty: invoiceableQty,
             unit_price_cents: netUnitPriceCents,
             tax_cents: taxCents,

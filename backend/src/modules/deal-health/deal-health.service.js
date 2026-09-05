@@ -2,6 +2,7 @@ import { ApiError } from '../../core/utils/apiError.js';
 import { ErrorCodes } from '../../core/utils/errorCodes.js';
 import { logAction } from '../_shared/audit-log/audit-log.service.js';
 import * as dealHealthRepository from './deal-health.repository.js';
+import { QUOTATION_STATUSES } from '../../core/constants.js';
 
 // PRD section 8.10 - configurable v1 thresholds.
 const STALLED_DAYS = 7;
@@ -18,8 +19,10 @@ const computeEffectiveDiscountPct = (lines) => {
     let weightedSum = 0;
     let weightTotal = 0;
     for (const line of lines) {
-        const preDiscountValue = line.qty * line.unit_price_cents;
-        weightedSum += preDiscountValue * line.discount_pct;
+        // Dollar-denominated weight is fine here - this only computes a
+        // weighted average percentage, so units cancel out.
+        const preDiscountValue = line.quantity * line.unitPrice;
+        weightedSum += preDiscountValue * line.discountPercent;
         weightTotal += preDiscountValue;
     }
     return weightTotal > 0 ? weightedSum / weightTotal : 0;
@@ -28,14 +31,18 @@ const computeEffectiveDiscountPct = (lines) => {
 const evaluateQuotation = async (quotation) => {
     const triggered = [];
 
+    // dhan's Quotation has no last_activity_at field; its default `updatedAt`
+    // timestamp is used as the "last meaningful activity" signal instead.
     if (
-        !['confirmed', 'cancelled'].includes(quotation.status) &&
-        daysSince(quotation.last_activity_at) >= STALLED_DAYS
+        ![QUOTATION_STATUSES.CONFIRMED, QUOTATION_STATUSES.CANCELLED, QUOTATION_STATUSES.REJECTED].includes(
+            quotation.status
+        ) &&
+        daysSince(quotation.updatedAt) >= STALLED_DAYS
     ) {
         triggered.push({
             type: 'STALLED',
             severity: 'MEDIUM',
-            details: { idle_days: Math.floor(daysSince(quotation.last_activity_at)) },
+            details: { idle_days: Math.floor(daysSince(quotation.updatedAt)) },
         });
     }
 
@@ -43,7 +50,7 @@ const evaluateQuotation = async (quotation) => {
     if (lines.length > 0) {
         const currentDiscountPct = computeEffectiveDiscountPct(lines);
         const history = await dealHealthRepository.findHistoricalQuotationsByOwner(
-            quotation.owner_id,
+            quotation.salesRepId,
             quotation._id,
             ANOMALY_LOOKBACK
         );
@@ -78,18 +85,18 @@ const evaluateQuotation = async (quotation) => {
         }
     }
 
-    if (quotation.requested_delivery_date) {
+    if (quotation.requestedDeliveryDate) {
         const fulfillment = await dealHealthRepository.findFulfillmentByQuotationId(quotation._id);
         const backordered = fulfillment && ['BACKORDER', 'PARTIAL_BACKORDER'].includes(fulfillment.status);
         const leadDays = DELIVERY_LEAD_DAYS + (backordered ? BACKORDER_EXTRA_LEAD_DAYS : 0);
         const feasibleDate = new Date(Date.now() + leadDays * MS_PER_DAY);
 
-        if (new Date(quotation.requested_delivery_date) < feasibleDate) {
+        if (new Date(quotation.requestedDeliveryDate) < feasibleDate) {
             triggered.push({
                 type: 'DELIVERY_SLIPPAGE',
                 severity: backordered ? 'HIGH' : 'MEDIUM',
                 details: {
-                    requested_delivery_date: quotation.requested_delivery_date,
+                    requested_delivery_date: quotation.requestedDeliveryDate,
                     estimated_feasible_date: feasibleDate,
                 },
             });
@@ -151,7 +158,7 @@ const nudgeAlert = async (alertId, { message }, actorId) => {
     const quotation = await dealHealthRepository.findQuotationById(alert.quotation_id);
 
     const notification = await dealHealthRepository.createNotification({
-        user_id: quotation.owner_id,
+        user_id: quotation.salesRepId,
         type: 'DEAL_ALERT_NUDGE',
         entity_ref: { entity_type: 'DealAlert', entity_id: alert._id },
     });
@@ -239,12 +246,12 @@ const resolvePeriodRange = (period, from, to) => {
 const buildSalesReportRows = async ({ period, team, status, product, from, to }) => {
     const { from: fromDate, to: toDate } = resolvePeriodRange(period, from, to);
 
-    const filter = { created_at: { $gte: fromDate, $lte: toDate } };
+    const filter = { createdAt: { $gte: fromDate, $lte: toDate } };
     if (status) filter.status = status;
 
     if (team) {
         const teamUsers = await dealHealthRepository.findUsersByTeam(team);
-        filter.owner_id = { $in: teamUsers.map((u) => u._id) };
+        filter.salesRepId = { $in: teamUsers.map((u) => u._id) };
     }
 
     const quotations = await dealHealthRepository.findQuotations(filter);
@@ -253,23 +260,25 @@ const buildSalesReportRows = async ({ period, team, status, product, from, to })
     for (const quotation of quotations) {
         let lines = await dealHealthRepository.findLinesByQuotationId(quotation._id);
         if (product) {
-            lines = lines.filter((l) => l.product_id?.toString() === product);
+            lines = lines.filter((l) => l.productId?.toString() === product);
         }
         if (product && lines.length === 0) continue;
 
-        const grossCents = lines.reduce((sum, l) => sum + l.qty * l.unit_price_cents, 0);
+        // Convert dhan's plain-dollar unitPrice to cents at this read boundary.
+        const grossCents = lines.reduce((sum, l) => sum + l.quantity * Math.round(l.unitPrice * 100), 0);
         const netCents = lines.reduce(
-            (sum, l) => sum + Math.round(l.qty * l.unit_price_cents * (1 - l.discount_pct / 100)),
+            (sum, l) =>
+                sum + Math.round(l.quantity * Math.round(l.unitPrice * 100) * (1 - l.discountPercent / 100)),
             0
         );
         const effectiveDiscountPct = computeEffectiveDiscountPct(lines);
 
         rows.push({
             quotation_id: quotation._id,
-            quote_no: quotation.quote_no,
-            owner_id: quotation.owner_id,
+            quote_no: quotation.quoteNumber,
+            owner_id: quotation.salesRepId,
             status: quotation.status,
-            created_at: quotation.created_at,
+            created_at: quotation.createdAt,
             line_count: lines.length,
             gross_cents: grossCents,
             net_cents: netCents,

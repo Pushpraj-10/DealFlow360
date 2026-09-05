@@ -13,6 +13,12 @@ import quotationsRoutes from './quotations/quotations.routes.js';
 import recommendationsRoutes from './recommendations/recommendations.routes.js';
 import riskEngineRoutes from './riskEngine/riskEngine.routes.js';
 import usersRoutes from './users/users.routes.js';
+import warehouseRouter from './warehouses/warehouse.router.js';
+import inventoryRouter from './inventory/inventory.router.js';
+import { fulfillmentRouter, backorderRouter } from './fulfillment/fulfillment.router.js';
+import subscriptionRouter from './subscriptions/subscription.router.js';
+import invoicingRouter from './invoicing/invoicing.router.js';
+import dealHealthRouter from './deal-health/deal-health.router.js';
 
 const registerModuleRoutes = (app) => {
     app.use('/api/v1/auth', authRoutes);
@@ -30,6 +36,13 @@ const registerModuleRoutes = (app) => {
     app.use('/api/v1/audit-logs', auditLogsRoutes);
     app.use('/api/v1/negotiations', negotiationsRoutes);
     app.use('/api/v1/recommendations', recommendationsRoutes);
+    app.use('/api/v1/warehouses', warehouseRouter);
+    app.use('/api/v1/inventory', inventoryRouter);
+    app.use('/api/v1/fulfillments', fulfillmentRouter);
+    app.use('/api/v1/backorders', backorderRouter);
+    app.use('/api/v1', subscriptionRouter);
+    app.use('/api/v1', invoicingRouter);
+    app.use('/api/v1', dealHealthRouter);
 };
 
 export {registerModuleRoutes};

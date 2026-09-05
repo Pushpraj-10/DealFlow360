@@ -86,16 +86,33 @@ const recomputeFulfillmentStatus = async (fulfillmentId, session) => {
  */
 const buildSplitPlan = async (quotationId) => {
     const lines = await fulfillmentRepository.findQuoteLinesByQuotationId(quotationId);
-    const stockLines = lines.filter((line) => line.product_id?.is_stock_managed);
+    // RECURRING lines bypass warehouse allocation regardless of the product's
+    // isStockManaged flag; ONE_TIME lines participate only when the product
+    // is a physical, stock-managed good.
+    const stockLines = lines.filter(
+        (line) => line.lineType !== 'RECURRING' && line.productId?.isStockManaged
+    );
 
     if (stockLines.length === 0) {
         return { requirements: [], warehouses: [], allocations: [], backorders: [] };
     }
 
+    for (const line of stockLines) {
+        if (!line.variantId?.sku) {
+            throw new ApiError(
+                400,
+                `Quotation line ${line._id} is stock-managed but has no product variant/SKU`,
+                [],
+                '',
+                ErrorCodes.VALIDATION_ERROR
+            );
+        }
+    }
+
     const requirements = stockLines.map((line) => ({
         quote_line_id: line._id,
-        sku: line.product_id.sku,
-        qty: line.qty,
+        sku: line.variantId.sku,
+        qty: line.quantity,
     }));
 
     const warehouses = await fulfillmentRepository.findActiveWarehouses();
@@ -262,7 +279,7 @@ const acceptSplit = async (fulfillmentId, actorId) => {
             );
 
             for (const allocation of allocations) {
-                const sku = allocation.quote_line_id.product_id.sku;
+                const sku = allocation.quote_line_id.variantId.sku;
                 const inventory = await fulfillmentRepository.findInventoryRow(
                     allocation.warehouse_id,
                     sku,
@@ -343,7 +360,16 @@ const overrideSplit = async (fulfillmentId, { allocations: requested, reason }, 
                     throw new ApiError(404, 'Quote line not found', [], '', ErrorCodes.NOT_FOUND);
                 }
 
-                const sku = quoteLine.product_id.sku;
+                if (!quoteLine.variantId?.sku) {
+                    throw new ApiError(
+                        400,
+                        `Quote line ${item.quote_line_id} has no product variant/SKU`,
+                        [],
+                        '',
+                        ErrorCodes.VALIDATION_ERROR
+                    );
+                }
+                const sku = quoteLine.variantId.sku;
                 const inventory = await fulfillmentRepository.findInventoryRow(
                     item.warehouse_id,
                     sku,
@@ -382,7 +408,7 @@ const overrideSplit = async (fulfillmentId, { allocations: requested, reason }, 
             for (const lineId of linesTouched) {
                 const quoteLine = await fulfillmentRepository.findQuoteLineById(lineId);
                 const allocatedQty = allocatedByLine.get(lineId) || 0;
-                const remainder = quoteLine.qty - allocatedQty;
+                const remainder = quoteLine.quantity - allocatedQty;
                 if (remainder > 0) {
                     await Backorder.create(
                         [{ fulfillment_id: fulfillmentId, quote_line_id: lineId, qty: remainder }],
@@ -479,7 +505,7 @@ const consolidateBackorder = async (backorderId, actorId) => {
             }
 
             const quoteLine = await fulfillmentRepository.findQuoteLineById(backorder.quote_line_id);
-            const sku = quoteLine.product_id.sku;
+            const sku = quoteLine.variantId.sku;
             const warehouses = await fulfillmentRepository.findActiveWarehouses();
 
             let remaining = backorder.qty;

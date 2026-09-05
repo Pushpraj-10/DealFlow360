@@ -108,6 +108,12 @@ const quotationSchema = new Schema(
             type: Number,
             default: 1,
             min: 1
+        },
+        // Added for the deal-health scope's delivery-slippage rule. Additive
+        // field - does not affect any existing behavior.
+        requestedDeliveryDate: {
+            type: Date,
+            default: null
         }
     },
     {timestamps: true}

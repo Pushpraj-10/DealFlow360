@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middleware/auth.middleware.js';
+import { authenticate } from '../../core/middlewares/auth.middleware.js';
 import {
     listFulfillments,
     getFulfillment,
@@ -13,7 +13,7 @@ import {
 } from './fulfillment.controller.js';
 
 const fulfillmentRouter = Router();
-fulfillmentRouter.use(requireAuth);
+fulfillmentRouter.use(authenticate);
 
 fulfillmentRouter.get('/', listFulfillments);
 fulfillmentRouter.post('/', createFulfillment);
@@ -24,7 +24,7 @@ fulfillmentRouter.post('/:id/override', overrideSplit);
 fulfillmentRouter.post('/:id/ship', recordShipment);
 
 const backorderRouter = Router();
-backorderRouter.use(requireAuth);
+backorderRouter.use(authenticate);
 
 backorderRouter.get('/', listBackorders);
 backorderRouter.post('/:id/consolidate', consolidateBackorder);

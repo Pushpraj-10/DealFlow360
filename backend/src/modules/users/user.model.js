@@ -43,6 +43,12 @@ const userSchema = new Schema(
         lastLoginAt: {
             type: Date,
             default: null
+        },
+        // Free-form team identifier, used by the reports/deal-health scope's
+        // team filter. Additive field - does not affect any existing behavior.
+        team: {
+            type: String,
+            default: null
         }
     },
     {timestamps: true}

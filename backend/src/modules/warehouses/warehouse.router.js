@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middleware/auth.middleware.js';
+import { authenticate } from '../../core/middlewares/auth.middleware.js';
 import { listWarehouses, createWarehouse, updateWarehouse } from './warehouse.controller.js';
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(authenticate);
 
 router.get('/', listWarehouses);
 router.post('/', createWarehouse);

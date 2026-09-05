@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middleware/auth.middleware.js';
+import { authenticate } from '../../core/middlewares/auth.middleware.js';
 import {
     listAlerts,
     nudgeAlert,
@@ -12,7 +12,7 @@ import {
 // Mounted at the API root in app.js since this feature spans three
 // resource prefixes (/deal-health, /reports, /dashboard).
 const router = Router();
-router.use(requireAuth);
+router.use(authenticate);
 
 router.get('/deal-health', listAlerts);
 router.post('/deal-health/:alertId/nudge', nudgeAlert);

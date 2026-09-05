@@ -1,27 +1,32 @@
 import { DealAlert } from './deal-alert.model.js';
 import { Notification } from './notification.model.js';
-import { Quotation } from '../_shared/placeholders/quotation.model.js';
-import { QuotationLine } from '../_shared/placeholders/quotation-line.model.js';
+import { Quotation } from '../quotations/quotation.model.js';
+import { QuotationLine } from '../quotationLines/quotationLine.model.js';
 import { Fulfillment } from '../fulfillment/fulfillment.model.js';
 import { Invoice } from '../invoicing/invoice.model.js';
 import { Subscription } from '../subscriptions/subscription.model.js';
-import { User } from '../auth/user.model.js';
+import { User } from '../users/user.model.js';
+import { USER_ROLES, QUOTATION_STATUSES } from '../../core/constants.js';
 
-const findOpenQuotations = () => Quotation.find({ status: { $ne: 'cancelled' } });
+const findOpenQuotations = () => Quotation.find({ status: { $ne: QUOTATION_STATUSES.CANCELLED } });
 
 const findQuotationById = (id) => Quotation.findById(id);
 
-const findQuotations = (filter = {}) => Quotation.find(filter).sort({ created_at: -1 });
+const findQuotations = (filter = {}) => Quotation.find(filter).sort({ createdAt: -1 });
 
-const findManagers = () => User.find({ role: { $in: ['sales_manager', 'finance_ops'] } });
+const findManagers = () => User.find({ role: { $in: [USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE] } });
 
 const findUsersByTeam = (team) => User.find({ team });
 
-const findLinesByQuotationId = (quotationId) => QuotationLine.find({ quotation_id: quotationId });
+const findLinesByQuotationId = (quotationId) => QuotationLine.find({ quotationId });
 
-const findHistoricalQuotationsByOwner = (ownerId, excludeQuotationId, limit) =>
-    Quotation.find({ owner_id: ownerId, status: { $ne: 'draft' }, _id: { $ne: excludeQuotationId } })
-        .sort({ created_at: -1 })
+const findHistoricalQuotationsByOwner = (salesRepId, excludeQuotationId, limit) =>
+    Quotation.find({
+        salesRepId,
+        status: { $ne: QUOTATION_STATUSES.DRAFT },
+        _id: { $ne: excludeQuotationId },
+    })
+        .sort({ createdAt: -1 })
         .limit(limit);
 
 const findFulfillmentByQuotationId = (quotationId) => Fulfillment.findOne({ quotation_id: quotationId });
