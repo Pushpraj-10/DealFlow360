@@ -269,14 +269,14 @@ export default function LoginPage() {
 
         /* ── Brand panel ─────────────────────── */
         .login-brand-panel {
-          flex: 0 0 44%;
-          background: #080E1C;
+          flex: 0 0 50%;
+          background: linear-gradient(145deg, #080E1C 0%, #111827 100%);
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
-          padding: 44px 52px;
+          padding: 40px 60px;
           position: relative;
           overflow: hidden;
+          border-right: 1px solid rgba(255,255,255,0.05);
         }
 
         .login-glow {
@@ -286,39 +286,39 @@ export default function LoginPage() {
         }
 
         .login-glow--1 {
-          width: 480px;
-          height: 480px;
-          background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
-          top: -140px;
-          left: -120px;
+          width: 600px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 60%);
+          top: -150px;
+          left: -150px;
         }
 
         .login-glow--2 {
-          width: 380px;
-          height: 380px;
-          background: radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%);
-          bottom: -80px;
+          width: 500px;
+          height: 500px;
+          background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 60%);
+          bottom: -100px;
           right: -100px;
         }
 
         .login-logo {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
           position: relative;
           z-index: 1;
         }
 
         .login-logo__mark {
-          width: 34px;
-          height: 34px;
-          border-radius: 9px;
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
           background: linear-gradient(135deg, #6366F1, #8B5CF6);
           display: flex;
           align-items: center;
           justify-content: center;
           color: #fff;
-          font-size: 16px;
+          font-size: 18px;
           font-weight: 800;
           letter-spacing: -0.5px;
           box-shadow: 0 4px 16px -4px rgba(99,102,241,0.7), 0 0 0 1px rgba(255,255,255,0.1) inset;
@@ -326,7 +326,7 @@ export default function LoginPage() {
 
         .login-logo__name {
           color: #F1F5F9;
-          font-size: 16px;
+          font-size: 18px;
           font-weight: 700;
           letter-spacing: -0.3px;
         }
@@ -334,90 +334,103 @@ export default function LoginPage() {
         .login-headline {
           position: relative;
           z-index: 1;
+          margin: auto 0;
+          max-width: 480px;
         }
 
         .login-eyebrow {
           color: #818CF8;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 1.5px;
-          margin: 0 0 16px;
+          letter-spacing: 2px;
+          margin: 0 0 20px;
+          display: inline-block;
+          background: rgba(129, 140, 248, 0.1);
+          padding: 6px 12px;
+          border-radius: 20px;
+          border: 1px solid rgba(129, 140, 248, 0.2);
         }
 
         .login-headline__title {
           color: #F8FAFC;
-          font-size: 36px;
+          font-size: 42px;
           font-weight: 800;
-          line-height: 1.12;
-          letter-spacing: -0.8px;
-          margin: 0 0 18px;
+          line-height: 1.1;
+          letter-spacing: -1px;
+          margin: 0 0 24px;
         }
 
         .login-headline__desc {
           color: #94A3B8;
-          font-size: 14px;
-          line-height: 1.65;
-          max-width: 360px;
-          margin: 0 0 32px;
+          font-size: 16px;
+          line-height: 1.6;
+          margin: 0 0 40px;
         }
 
         .login-features {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
         }
 
         .login-feature-pill {
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 10px 14px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.07);
-          border-radius: 8px;
-          color: #CBD5E1;
-          font-size: 13px;
-          transition: background 0.15s;
+          gap: 12px;
+          padding: 14px 16px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 12px;
+          color: #E2E8F0;
+          font-size: 13.5px;
+          font-weight: 500;
+          transition: all 0.2s;
         }
 
         .login-feature-pill:hover {
           background: rgba(99,102,241,0.08);
-          border-color: rgba(99,102,241,0.2);
+          border-color: rgba(99,102,241,0.3);
+          transform: translateY(-2px);
         }
 
         .login-feature-pill__icon {
           display: flex;
           align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: rgba(99,102,241,0.1);
+          border-radius: 8px;
           color: #818CF8;
           flex-shrink: 0;
         }
 
         .login-brand-footer {
           color: rgba(148,163,184,0.5);
-          font-size: 11.5px;
+          font-size: 12px;
           position: relative;
           z-index: 1;
         }
 
         /* ── Form panel ──────────────────────── */
         .login-form-side {
-          flex: 1;
+          flex: 0 0 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #F8FAFC;
+          background: #ffffff;
           padding: 48px 24px;
         }
 
         .login-form-card {
           width: 100%;
-          max-width: 390px;
+          max-width: 420px;
           background: #fff;
-          border: 1px solid #E2E8F0;
-          border-radius: 16px;
-          padding: 32px;
-          box-shadow: 0 8px 32px -8px rgba(15,23,42,0.12), 0 2px 8px -2px rgba(15,23,42,0.07);
+          border: 1px solid transparent;
+          border-radius: 0;
+          padding: 0 32px;
+          box-shadow: none;
         }
 
         .login-tab-bar {
@@ -426,7 +439,7 @@ export default function LoginPage() {
           background: #F1F5F9;
           border-radius: 9px;
           padding: 4px;
-          margin-bottom: 28px;
+          margin-bottom: 32px;
         }
 
         .login-tab {
