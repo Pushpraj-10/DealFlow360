@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 import '../core/config/env.js';
 import connectDB from '../core/db/index.js';
+import {getMongoUri} from '../core/config/database.js';
 import {
     APPROVAL_STATUSES,
     CUSTOMER_STATUSES,
@@ -79,9 +80,7 @@ const buildLine = ({quotation, product, quantity, discountPercent, allowedDiscou
 };
 
 const seed = async () => {
-    if (!process.env.MONGODB_URI) {
-        throw new Error('MONGODB_URI is required to seed Person 1 data');
-    }
+    getMongoUri();
 
     await connectDB();
 
