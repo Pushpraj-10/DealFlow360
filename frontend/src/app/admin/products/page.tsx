@@ -37,8 +37,8 @@ export default function ProductsPage() {
   });
 
   const load = () => {
-    api.get<Product[]>('/products').then(setProducts).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load products'));
-    api.get<Category[]>('/categories').then(setCategories).catch(() => {});
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load products'));
+    api.get<{ categories: Category[] }>('/categories').then((d) => setCategories(d.categories)).catch(() => {});
   };
 
   useEffect(load, []);
@@ -61,7 +61,7 @@ export default function ProductsPage() {
 
   const openVariants = (p: Product) => {
     setVariantsFor(p);
-    api.get<Variant[]>(`/products/${p._id}/variants`).then(setVariants).catch(() => setVariants([]));
+    api.get<{ variants: Variant[] }>(`/products/${p._id}/variants`).then((d) => setVariants(d.variants)).catch(() => setVariants([]));
   };
 
   const addVariant = async () => {

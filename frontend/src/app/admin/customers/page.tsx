@@ -15,10 +15,10 @@ export default function CustomersPage() {
 
   const load = () => {
     api
-      .get<Customer[]>('/customers')
-      .then(setCustomers)
+      .get<{ customers: Customer[] }>('/customers')
+      .then((d) => setCustomers(d.customers))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'));
-    api.get<Tier[]>('/customer-tiers').then(setTiers).catch(() => {});
+    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
   };
 
   useEffect(load, []);

@@ -15,8 +15,8 @@ export default function DiscountRulesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<Customer[]>('/customers').then(setCustomers).catch(() => {});
-    api.get<Product[]>('/products').then(setProducts).catch(() => {});
+    api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   }, []);
 
   const lookup = async () => {

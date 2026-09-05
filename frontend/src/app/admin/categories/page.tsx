@@ -14,8 +14,8 @@ export default function CategoriesPage() {
 
   const load = () => {
     api
-      .get<Category[]>('/categories')
-      .then(setCategories)
+      .get<{ categories: Category[] }>('/categories')
+      .then((d) => setCategories(d.categories))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load categories'));
   };
 

@@ -5,18 +5,23 @@ import { api, ApiClientError } from '@/lib/api';
 
 type Customer = { _id: string; name: string; company: string };
 type Product = { _id: string; name: string };
-type Quotation = {
-  _id: string;
+// Shape returned by GET /quotations (list endpoint) - a lighter DTO than the
+// raw Mongoose document returned by the create/detail/submit endpoints below.
+type QuotationListItem = {
+  id: string;
   quoteNumber: string;
   status: string;
-  grandTotal: number;
+  total: number;
   riskSeverity: string;
-  customerId: { _id: string; name: string } | string;
+  customer: { id: string; name: string; company: string } | null;
 };
+// Shape returned by POST /quotations, GET /quotations/:id, POST .../submit -
+// a raw Mongoose document (real _id).
+type QuotationDoc = { _id: string };
 type QuotationLine = { _id: string; productId: { name: string } | string; quantity: number; unitPrice: number; discountPercent: number; lineTotal: number; is_violation: boolean };
 
 export default function QuotationsPage() {
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -28,32 +33,29 @@ export default function QuotationsPage() {
 
   const loadQuotations = () => {
     api
-      .get<{ quotations: Quotation[] }>('/quotations')
+      .get<{ quotations: QuotationListItem[] }>('/quotations')
       .then((d) => setQuotations(d.quotations))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotations'));
   };
 
   useEffect(() => {
     loadQuotations();
-    api.get<Customer[]>('/customers').then(setCustomers).catch(() => {});
-    api.get<Product[]>('/products').then(setProducts).catch(() => {});
+    api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   }, []);
 
   const loadLines = (id: string) => {
     api
-      .get<{ lines: QuotationLine[] }>(`/quotations/${id}/risk`)
-      .catch(() => null);
-    // Lines come back attached to quotation mutations; simplest reliable
-    // source is re-fetching the quotation list detail via the lines the
-    // last add/submit call returned, so refetch by re-adding nothing and
-    // relying on cached lines state from create/add responses instead.
+      .get<{ lines: QuotationLine[] }>(`/quotations/${id}`)
+      .then((d) => setLines(d.lines))
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotation lines'));
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      const data = await api.post<{ quotation: Quotation }>('/quotations', { customerId: newCustomerId });
+      const data = await api.post<{ quotation: QuotationDoc }>('/quotations', { customerId: newCustomerId });
       setNewCustomerId('');
       loadQuotations();
       setSelectedId(data.quotation._id);
@@ -120,18 +122,18 @@ export default function QuotationsPage() {
           <h2 className="text-sm uppercase text-gray-500 font-bold mb-3">All Quotations</h2>
           <ul className="space-y-1 text-sm">
             {quotations.map((q) => (
-              <li key={q._id}>
+              <li key={q.id}>
                 <button
                   onClick={() => {
-                    setSelectedId(q._id);
+                    setSelectedId(q.id);
                     setLines([]);
-                    loadLines(q._id);
+                    loadLines(q.id);
                   }}
-                  className={`w-full text-left px-2 py-2 rounded hover:bg-gray-100 ${selectedId === q._id ? 'bg-blue-50 text-blue-700' : ''}`}
+                  className={`w-full text-left px-2 py-2 rounded hover:bg-gray-100 ${selectedId === q.id ? 'bg-blue-50 text-blue-700' : ''}`}
                 >
                   <div className="font-medium">{q.quoteNumber}</div>
                   <div className="text-xs text-gray-500">
-                    {q.status} - ${q.grandTotal?.toFixed?.(2) ?? 0}
+                    {q.customer?.company || q.customer?.name} - {q.status} - ${q.total?.toFixed?.(2) ?? 0}
                   </div>
                 </button>
               </li>

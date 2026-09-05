@@ -19,9 +19,9 @@ export default function PriceListsPage() {
   const [itemForm, setItemForm] = useState({ productId: '', unitPrice: '', basePriceOverride: '' });
 
   const load = () => {
-    api.get<PriceList[]>('/price-lists').then(setPriceLists).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
-    api.get<Tier[]>('/customer-tiers').then(setTiers).catch(() => {});
-    api.get<Product[]>('/products').then(setProducts).catch(() => {});
+    api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
+    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
   };
 
   useEffect(load, []);

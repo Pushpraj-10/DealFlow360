@@ -14,8 +14,8 @@ export default function CustomerTiersPage() {
 
   const load = () => {
     api
-      .get<Tier[]>('/customer-tiers')
-      .then(setTiers)
+      .get<{ tiers: Tier[] }>('/customer-tiers')
+      .then((d) => setTiers(d.tiers))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load tiers'));
   };
 
