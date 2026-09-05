@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, FileCheck } from 'lucide-react';
 
 type Rule = {
   _id: string;
@@ -14,6 +15,13 @@ type Rule = {
 };
 
 const ROLES = ['SALES_MANAGER', 'FINANCE', 'ADMIN'];
+
+function getSeverityClass(s: string) {
+  if (s === 'HIGH') return 'risk-high';
+  if (s === 'MEDIUM') return 'risk-medium';
+  if (s === 'LOW') return 'risk-low';
+  return 'risk-none';
+}
 
 export default function ApprovalRulesPage() {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -28,8 +36,7 @@ export default function ApprovalRulesPage() {
   });
 
   const load = () => {
-    api
-      .get<{ rules: Rule[] }>('/approvals/rules')
+    api.get<{ rules: Rule[] }>('/approvals/rules')
       .then((d) => setRules(d.rules))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load approval rules'));
   };
@@ -61,90 +68,116 @@ export default function ApprovalRulesPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Approval Rules</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Add Rule
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Approval Rules</h1>
+          <p className="df-page-subtitle">Define which risk bands require approval and who approves them</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Add Rule
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Risk Range</th>
-              <th className="pb-2">Severity</th>
-              <th className="pb-2">Required Roles</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((r) => (
-              <tr key={r._id} className="border-b">
-                <td className="py-3 font-medium">{r.name}</td>
-                <td className="py-3">
-                  {r.minRiskScore} - {r.maxRiskScore}
-                </td>
-                <td className="py-3">{r.severity}</td>
-                <td className="py-3">{r.requiredApprovalRoles.join(', ') || 'None'}</td>
-              </tr>
-            ))}
-            {rules.length === 0 && (
+      <div className="df-card">
+        {rules.length === 0 ? (
+          <div className="df-empty">
+            <FileCheck size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No approval rules</div>
+            <div className="df-empty-desc">Rules map risk score ranges to required approvers.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={4} className="py-4 text-center text-gray-500">
-                  No approval rules yet.
-                </td>
+                <th>Rule Name</th>
+                <th>Risk Range</th>
+                <th>Severity</th>
+                <th>Required Approvers</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r._id}>
+                  <td style={{ fontWeight: 500 }}>{r.name}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                    {r.minRiskScore} – {r.maxRiskScore}
+                  </td>
+                  <td>
+                    <span className={`risk-badge ${getSeverityClass(r.severity)}`}>{r.severity}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {r.requiredApprovalRoles.length === 0 ? (
+                        <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>None</span>
+                      ) : (
+                        r.requiredApprovalRoles.map((role) => (
+                          <span key={role} style={{ fontSize: 11, background: 'var(--surface-02)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 99, color: 'var(--text-secondary)' }}>
+                            {role.replace('_', ' ')}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Add Approval Rule</h2>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form onSubmit={handleCreate} className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Approval Rule</h2>
             </div>
-            <div className="mb-3 flex gap-2">
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Min Risk</label>
-                <input type="number" value={form.minRiskScore} onChange={(e) => setForm({ ...form, minRiskScore: e.target.value })} className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Rule name</label>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="df-input" placeholder="e.g. High Risk Escalation" />
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Max Risk</label>
-                <input type="number" value={form.maxRiskScore} onChange={(e) => setForm({ ...form, maxRiskScore: e.target.value })} className="w-full border rounded px-3 py-2" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="df-field">
+                  <label className="df-label">Min risk score</label>
+                  <input type="number" value={form.minRiskScore} onChange={(e) => setForm({ ...form, minRiskScore: e.target.value })} className="df-input" />
+                </div>
+                <div className="df-field">
+                  <label className="df-label">Max risk score</label>
+                  <input type="number" value={form.maxRiskScore} onChange={(e) => setForm({ ...form, maxRiskScore: e.target.value })} className="df-input" />
+                </div>
+              </div>
+              <div className="df-field">
+                <label className="df-label">Severity</label>
+                <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })} className="df-select">
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Required approval roles</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {ROLES.map((role) => (
+                    <label key={role} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={form.requiredApprovalRoles.includes(role)} onChange={() => toggleRole(role)} />
+                      <span style={{ color: 'var(--text-primary)' }}>{role.replace('_', ' ')}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Severity</label>
-              <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })} className="w-full border rounded px-3 py-2">
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Required Approval Roles</label>
-              {ROLES.map((role) => (
-                <label key={role} className="flex items-center gap-2 text-sm mb-1">
-                  <input type="checkbox" checked={form.requiredApprovalRoles.includes(role)} onChange={() => toggleRole(role)} />
-                  {role}
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
-              </button>
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Rule</button>
             </div>
           </form>
         </div>

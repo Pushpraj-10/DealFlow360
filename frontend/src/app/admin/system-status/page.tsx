@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { Database, CheckCircle, XCircle, Loader } from 'lucide-react';
 
-const STUB_MODULES: { label: string; path: string }[] = [
-  { label: 'Negotiations', path: '/negotiations' },
-  { label: 'Recommendations', path: '/recommendations' },
-  { label: 'Risk Engine', path: '/risk-engine' },
-  { label: 'Quotation Lines (module status)', path: '/quotation-lines' },
-  { label: 'Audit Logs (module status)', path: '/audit-logs' },
+const STUB_MODULES: { label: string; path: string; description: string }[] = [
+  { label: 'Negotiations', path: '/negotiations', description: 'Customer negotiation thread system' },
+  { label: 'Recommendations', path: '/recommendations', description: 'Co-purchase and upsell recommendations' },
+  { label: 'Risk Engine', path: '/risk-engine', description: 'Blended discount risk scoring detail' },
+  { label: 'Quotation Lines', path: '/quotation-lines', description: 'Per-line reporting and audit trails' },
+  { label: 'Audit Logs', path: '/audit-logs', description: 'Per-quote audit trail view' },
 ];
 
 type Status = { module: string; ready: boolean };
@@ -26,34 +27,68 @@ export default function SystemStatusPage() {
   }, []);
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">System Status</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        These backend modules currently only expose a &quot;module ready&quot; status endpoint - the underlying
-        business logic (co-purchase recommendations, blended risk scoring detail, live negotiation threads, per-quote
-        audit trail view, per-line reporting) hasn&apos;t been built yet. No UI is built against them beyond this
-        status check, to avoid presenting functionality that doesn&apos;t exist.
-      </p>
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">System Status</h1>
+          <p className="df-page-subtitle">Backend module availability and stub readiness</p>
+        </div>
+      </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
+      <div
+        style={{
+          background: 'var(--amber-light)',
+          border: '1px solid var(--amber-muted)',
+          borderRadius: 'var(--radius-md)',
+          padding: '12px 16px',
+          marginBottom: 20,
+          fontSize: 13,
+          color: 'var(--amber)',
+          lineHeight: 1.6,
+        }}
+      >
+        These modules expose a &ldquo;ready&rdquo; status endpoint only — the underlying business logic hasn&apos;t been implemented yet. No UI is built against them to avoid presenting non-existent functionality.
+      </div>
+
+      <div className="df-card">
+        <table className="df-table">
           <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Module</th>
-              <th className="pb-2">Status</th>
+            <tr>
+              <th>Module</th>
+              <th>Description</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {STUB_MODULES.map((m) => {
               const result = results[m.path];
               return (
-                <tr key={m.path} className="border-b">
-                  <td className="py-3 font-medium">{m.label}</td>
-                  <td className="py-3">
-                    {!result && <span className="text-gray-400">Checking...</span>}
-                    {result === 'error' && <span className="text-red-600">Unreachable</span>}
+                <tr key={m.path}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Database size={13} color="var(--text-tertiary)" />
+                      <span style={{ fontWeight: 500 }}>{m.label}</span>
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{m.description}</td>
+                  <td>
+                    {!result && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                        <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                        Checking…
+                      </span>
+                    )}
+                    {result === 'error' && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--red)' }}>
+                        <XCircle size={12} />
+                        Unreachable
+                      </span>
+                    )}
                     {result && result !== 'error' && (
-                      <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">Stub ready (no business logic yet)</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <CheckCircle size={12} color="var(--green)" />
+                        Stub ready
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -62,6 +97,10 @@ export default function SystemStatusPage() {
           </tbody>
         </table>
       </div>
+
+      <style jsx>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }

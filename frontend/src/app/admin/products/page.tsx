@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, Package, X } from 'lucide-react';
 
 type Category = { _id: string; name: string };
 type Product = {
@@ -15,6 +16,25 @@ type Product = {
   isStockManaged: boolean;
 };
 type Variant = { _id: string; sku: string; extraPrice: number };
+
+function BillingBadge({ type }: { type: string }) {
+  const isRecurring = type === 'RECURRING';
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 500,
+        padding: '2px 8px',
+        borderRadius: 99,
+        background: isRecurring ? 'var(--blue-light)' : 'var(--surface-02)',
+        color: isRecurring ? 'var(--blue)' : 'var(--text-secondary)',
+        border: `1px solid ${isRecurring ? 'var(--blue-muted)' : 'var(--border)'}`,
+      }}
+    >
+      {type === 'ONE_TIME' ? 'One-time' : type === 'RECURRING' ? 'Recurring' : type}
+    </span>
+  );
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,7 +57,9 @@ export default function ProductsPage() {
   });
 
   const load = () => {
-    api.get<Product[]>('/products').then(setProducts).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load products'));
+    api.get<Product[]>('/products').then(setProducts).catch((err) =>
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load products')
+    );
     api.get<Category[]>('/categories').then(setCategories).catch(() => {});
   };
 
@@ -76,136 +98,268 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Product Catalog</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Add Product
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Product Catalog</h1>
+          <p className="df-page-subtitle">{products.length} product{products.length !== 1 ? 's' : ''} in catalog</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Add Product
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Category</th>
-              <th className="pb-2">Type</th>
-              <th className="pb-2">Billing</th>
-              <th className="pb-2">Price</th>
-              <th className="pb-2">Stock Managed</th>
-              <th className="pb-2">Variants</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => (
-              <tr key={p._id} className="border-b">
-                <td className="py-3 font-medium">{p.name}</td>
-                <td className="py-3">{typeof p.categoryId === 'object' ? p.categoryId.name : p.categoryId}</td>
-                <td className="py-3">{p.productType}</td>
-                <td className="py-3">{p.billingType}</td>
-                <td className="py-3">${p.basePrice.toFixed(2)}</td>
-                <td className="py-3">{p.isStockManaged ? 'Yes' : 'No'}</td>
-                <td className="py-3">
-                  <button onClick={() => openVariants(p)} className="text-blue-600 hover:underline">
-                    Manage
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {products.length === 0 && (
+      <div className="df-card">
+        {products.length === 0 ? (
+          <div className="df-empty">
+            <Package size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No products yet</div>
+            <div className="df-empty-desc">Add your first product to the catalog.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={7} className="py-4 text-center text-gray-500">
-                  No products yet.
-                </td>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Billing</th>
+                <th style={{ textAlign: 'right' }}>Base Price</th>
+                <th style={{ textAlign: 'center' }}>Stock</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {products.map((p) => (
+                <tr key={p._id}>
+                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                    {typeof p.categoryId === 'object' ? p.categoryId.name : p.categoryId}
+                  </td>
+                  <td>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-02)', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--border)' }}>
+                      {p.productType}
+                    </span>
+                  </td>
+                  <td><BillingBadge type={p.billingType} /></td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                    ${p.basePrice.toFixed(2)}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: p.isStockManaged ? 'var(--green)' : 'var(--border-strong)',
+                      }}
+                      title={p.isStockManaged ? 'Stock managed' : 'Not stock managed'}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => openVariants(p)}
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 12, color: 'var(--accent)' }}
+                    >
+                      Variants
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
+      {/* Add Product Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Add Product</h2>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form
+            onSubmit={handleCreate}
+            className="df-modal df-modal-wide"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Product</h2>
             </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Category</label>
-              <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} required className="w-full border rounded px-3 py-2">
-                <option value="">Select...</option>
-                {categories.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Product Type</label>
-              <input value={form.productType} onChange={(e) => setForm({ ...form, productType: e.target.value })} className="w-full border rounded px-3 py-2" />
-            </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Billing Type</label>
-              <select value={form.billingType} onChange={(e) => setForm({ ...form, billingType: e.target.value })} className="w-full border rounded px-3 py-2">
-                <option value="ONE_TIME">One-time</option>
-                <option value="RECURRING">Recurring</option>
-              </select>
-            </div>
-            <div className="mb-3 flex gap-2">
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Base Price ($)</label>
-                <input type="number" step="0.01" value={form.basePrice} onChange={(e) => setForm({ ...form, basePrice: e.target.value })} required className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Product name</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                  className="df-input"
+                  placeholder="e.g. Enterprise SSD"
+                />
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Cost Price ($)</label>
-                <input type="number" step="0.01" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} required className="w-full border rounded px-3 py-2" />
+              <div className="df-field">
+                <label className="df-label">Category</label>
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  required
+                  className="df-select"
+                >
+                  <option value="">Select category…</option>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="df-field">
+                  <label className="df-label">Product type</label>
+                  <input
+                    value={form.productType}
+                    onChange={(e) => setForm({ ...form, productType: e.target.value })}
+                    className="df-input"
+                    placeholder="Hardware, Software, Service…"
+                  />
+                </div>
+                <div className="df-field">
+                  <label className="df-label">Billing type</label>
+                  <select
+                    value={form.billingType}
+                    onChange={(e) => setForm({ ...form, billingType: e.target.value })}
+                    className="df-select"
+                  >
+                    <option value="ONE_TIME">One-time</option>
+                    <option value="RECURRING">Recurring</option>
+                  </select>
+                </div>
+                <div className="df-field">
+                  <label className="df-label">Base price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.basePrice}
+                    onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+                    required
+                    className="df-input"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="df-field">
+                  <label className="df-label">Cost price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.costPrice}
+                    onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+                    required
+                    className="df-input"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    cursor: 'pointer',
+                    padding: '10px 12px',
+                    background: 'var(--surface-02)',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.isStockManaged}
+                    onChange={(e) => setForm({ ...form, isStockManaged: e.target.checked })}
+                    style={{ width: 14, height: 14 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                      Stock-managed product
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      Physical goods that go through warehouse allocation and fulfillment
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
-            <div className="mb-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.isStockManaged} onChange={(e) => setForm({ ...form, isStockManaged: e.target.checked })} />
-                Stock-managed (physical good, goes through warehouse allocation)
-              </label>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
+              <button type="submit" className="btn btn-primary">
+                Create Product
               </button>
             </div>
           </form>
         </div>
       )}
 
+      {/* Variants Modal */}
       {variantsFor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Variants - {variantsFor.name}</h2>
-            <ul className="mb-4 text-sm space-y-1">
-              {variants.map((v) => (
-                <li key={v._id} className="flex justify-between border-b py-1">
-                  <span>{v.sku}</span>
-                  <span className="text-gray-400">+${v.extraPrice.toFixed(2)}</span>
-                </li>
-              ))}
-              {variants.length === 0 && <li className="text-gray-400">No variants yet.</li>}
-            </ul>
-            <div className="flex gap-2 mb-4">
-              <input value={newSku} onChange={(e) => setNewSku(e.target.value)} placeholder="SKU" className="flex-1 border rounded px-3 py-2 text-sm" />
-              <button onClick={addVariant} className="bg-blue-600 text-white px-3 py-2 rounded text-sm">
-                Add
+        <div className="df-modal-overlay" onClick={() => setVariantsFor(null)}>
+          <div className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingBottom: 16 }}>
+              <div>
+                <h2 className="df-modal-title">Variants</h2>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{variantsFor.name}</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setVariantsFor(null)}>
+                <X size={14} />
               </button>
             </div>
-            <div className="flex justify-end">
-              <button onClick={() => setVariantsFor(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Close
+            <div className="df-modal-body">
+              {variants.length > 0 ? (
+                <div style={{ marginBottom: 16 }}>
+                  {variants.map((v) => (
+                    <div
+                      key={v._id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 0',
+                        borderBottom: '1px solid var(--border)',
+                        fontSize: 13,
+                      }}
+                    >
+                      <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{v.sku}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>+${v.extraPrice.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 14 }}>
+                  No variants yet.
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={newSku}
+                  onChange={(e) => setNewSku(e.target.value)}
+                  placeholder="SKU (e.g. SSD-512GB)"
+                  className="df-input"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={addVariant} disabled={!newSku} className="btn btn-secondary">
+                  Add
+                </button>
+              </div>
+            </div>
+            <div className="df-modal-footer">
+              <button onClick={() => setVariantsFor(null)} className="btn btn-ghost">
+                Done
               </button>
             </div>
           </div>

@@ -2,12 +2,23 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Download, BarChart2 } from 'lucide-react';
 
 type ReportRow = { quote_no: string; status: string; line_count: number; gross_cents: number; net_cents: number; effective_discount_pct: number };
 type Report = { rows: ReportRow[]; summary: { totalQuotations: number; totalNetCents: number; avgDiscountPct: number } };
 
 function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function getStatusClass(status: string): string {
+  const s = status?.toLowerCase() ?? '';
+  if (s === 'draft') return 'status-draft';
+  if (s.includes('pending')) return 'status-pending';
+  if (s === 'approved') return 'status-approved';
+  if (s === 'rejected') return 'status-rejected';
+  if (s === 'confirmed') return 'status-confirmed';
+  return 'status-draft';
 }
 
 export default function ReportsPage() {
@@ -25,7 +36,9 @@ export default function ReportsPage() {
   const handleExport = () => {
     const token = window.localStorage.getItem('dealflow360_access_token');
     const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001/api/v1';
-    fetch(`${base}/reports/sales/export?period=${period}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${base}/reports/sales/export?period=${period}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((r) => r.blob())
       .then((blob) => {
         const url = window.URL.createObjectURL(blob);
@@ -37,64 +50,134 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-        <button onClick={handleExport} className="px-4 py-2 bg-gray-800 text-white rounded shadow text-sm">
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Sales Reports</h1>
+          <p className="df-page-subtitle">Quotation performance, net value, and discount analytics</p>
+        </div>
+        <button onClick={handleExport} className="btn btn-secondary" style={{ gap: 7 }}>
+          <Download size={13} />
           Export XLSX
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="flex gap-4 mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <select value={period} onChange={(e) => setPeriod(e.target.value)} className="border rounded px-3 py-2 text-sm">
-          <option value="all">Period: All time</option>
-          <option value="today">Period: Today</option>
-          <option value="week">Period: This week</option>
-        </select>
+      {/* Period filter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Period:</span>
+        {['all', 'today', 'week'].map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 99,
+              fontSize: 12,
+              fontWeight: period === p ? 600 : 400,
+              border: `1px solid ${period === p ? 'var(--accent)' : 'var(--border)'}`,
+              background: period === p ? 'var(--accent-light)' : 'var(--surface-01)',
+              color: period === p ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              transition: 'all 120ms',
+            }}
+          >
+            {p === 'all' ? 'All time' : p.charAt(0).toUpperCase() + p.slice(1)}
+          </button>
+        ))}
       </div>
 
       {report && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-sm text-gray-500 mb-1">Quotations</h3>
-              <p className="text-3xl font-bold text-gray-900">{report.summary.totalQuotations}</p>
+          {/* Summary metrics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div className="df-metric">
+              <div className="df-metric-label">Quotations</div>
+              <div className="df-metric-value text-num">{report.summary.totalQuotations}</div>
+              <div className="df-metric-sub">in selected period</div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-sm text-gray-500 mb-1">Total Net Value</h3>
-              <p className="text-3xl font-bold text-gray-900">{money(report.summary.totalNetCents)}</p>
+            <div className="df-metric">
+              <div className="df-metric-label">Total Net Value</div>
+              <div className="df-metric-value text-num">{money(report.summary.totalNetCents)}</div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-sm text-gray-500 mb-1">Avg Discount</h3>
-              <p className="text-3xl font-bold text-gray-900">{report.summary.avgDiscountPct}%</p>
+            <div className="df-metric">
+              <div className="df-metric-label">Avg Discount</div>
+              <div
+                className="df-metric-value text-num"
+                style={{
+                  color:
+                    report.summary.avgDiscountPct > 20
+                      ? 'var(--amber)'
+                      : 'var(--text-primary)',
+                }}
+              >
+                {report.summary.avgDiscountPct}%
+              </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-gray-600">
-                  <th className="pb-2">Quote No</th>
-                  <th className="pb-2">Status</th>
-                  <th className="pb-2">Lines</th>
-                  <th className="pb-2">Net Value</th>
-                  <th className="pb-2">Discount %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.rows.map((r) => (
-                  <tr key={r.quote_no} className="border-b">
-                    <td className="py-2 font-medium">{r.quote_no}</td>
-                    <td className="py-2">{r.status}</td>
-                    <td className="py-2">{r.line_count}</td>
-                    <td className="py-2">{money(r.net_cents)}</td>
-                    <td className="py-2">{r.effective_discount_pct}%</td>
+          {/* Row table */}
+          <div className="df-card">
+            <div className="df-card-header">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600 }}>
+                <BarChart2 size={14} color="var(--accent)" />
+                Quotation Breakdown
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{report.rows.length} rows</span>
+            </div>
+            {report.rows.length === 0 ? (
+              <div className="df-empty" style={{ padding: '32px' }}>
+                <div className="df-empty-title">No data for this period</div>
+                <div className="df-empty-desc">Try switching the period filter above.</div>
+              </div>
+            ) : (
+              <table className="df-table">
+                <thead>
+                  <tr>
+                    <th>Quote No.</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Lines</th>
+                    <th style={{ textAlign: 'right' }}>Net Value</th>
+                    <th style={{ textAlign: 'right' }}>Eff. Discount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {report.rows.map((r) => (
+                    <tr key={r.quote_no}>
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.quote_no}</span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${getStatusClass(r.status)}`}>{r.status}</span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.line_count}</td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                        {money(r.net_cents)}
+                      </td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color:
+                              r.effective_discount_pct > 20
+                                ? 'var(--amber)'
+                                : 'var(--text-primary)',
+                          }}
+                        >
+                          {r.effective_discount_pct}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </>
       )}

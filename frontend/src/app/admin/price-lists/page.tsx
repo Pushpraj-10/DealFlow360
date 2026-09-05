@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, BadgePercent } from 'lucide-react';
 
 type Tier = { _id: string; name: string };
 type Product = { _id: string; name: string };
@@ -19,7 +20,9 @@ export default function PriceListsPage() {
   const [itemForm, setItemForm] = useState({ productId: '', unitPrice: '', basePriceOverride: '' });
 
   const load = () => {
-    api.get<PriceList[]>('/price-lists').then(setPriceLists).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists'));
+    api.get<PriceList[]>('/price-lists').then(setPriceLists).catch((err) =>
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists')
+    );
     api.get<Tier[]>('/customer-tiers').then(setTiers).catch(() => {});
     api.get<Product[]>('/products').then(setProducts).catch(() => {});
   };
@@ -55,109 +58,116 @@ export default function PriceListsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Price Lists</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Add Price List
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Price Lists</h1>
+          <p className="df-page-subtitle">Tier-specific pricing for products in quotations</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Add Price List
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Tier</th>
-              <th className="pb-2">Currency</th>
-              <th className="pb-2">Items</th>
-              <th className="pb-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {priceLists.map((pl) => (
-              <tr key={pl._id} className="border-b">
-                <td className="py-3 font-medium">{pl.name}</td>
-                <td className="py-3">{typeof pl.customerTierId === 'object' ? pl.customerTierId.name : pl.customerTierId}</td>
-                <td className="py-3">{pl.currencyCode}</td>
-                <td className="py-3">{pl.items.length}</td>
-                <td className="py-3">
-                  <button onClick={() => setItemsFor(pl)} className="text-blue-600 hover:underline">
-                    + Add Item
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {priceLists.length === 0 && (
+      <div className="df-card">
+        {priceLists.length === 0 ? (
+          <div className="df-empty">
+            <BadgePercent size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No price lists</div>
+            <div className="df-empty-desc">Price lists define tier-specific unit prices for products.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-500">
-                  No price lists yet.
-                </td>
+                <th>Name</th>
+                <th>Customer Tier</th>
+                <th>Currency</th>
+                <th style={{ textAlign: 'right' }}>Items</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {priceLists.map((pl) => (
+                <tr key={pl._id}>
+                  <td style={{ fontWeight: 500 }}>{pl.name}</td>
+                  <td>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-02)', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--border)' }}>
+                      {typeof pl.customerTierId === 'object' ? pl.customerTierId.name : pl.customerTierId}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{pl.currencyCode}</td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pl.items.length}</td>
+                  <td>
+                    <button onClick={() => setItemsFor(pl)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+                      Add Item
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Add Price List</h2>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form onSubmit={handleCreate} className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Price List</h2>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Customer Tier</label>
-              <select value={form.customerTierId} onChange={(e) => setForm({ ...form, customerTierId: e.target.value })} required className="w-full border rounded px-3 py-2">
-                <option value="">Select...</option>
-                {tiers.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Name</label>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="df-input" placeholder="e.g. Enterprise USD" />
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Customer tier</label>
+                <select value={form.customerTierId} onChange={(e) => setForm({ ...form, customerTierId: e.target.value })} required className="df-select">
+                  <option value="">Select tier…</option>
+                  {tiers.map((t) => <option key={t._id} value={t._id}>{t.name}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
-              </button>
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">Cancel</button>
+              <button type="submit" className="btn btn-primary">Create</button>
             </div>
           </form>
         </div>
       )}
 
       {itemsFor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Add Item - {itemsFor.name}</h2>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Product</label>
-              <select value={itemForm.productId} onChange={(e) => setItemForm({ ...itemForm, productId: e.target.value })} className="w-full border rounded px-3 py-2">
-                <option value="">Select...</option>
-                {products.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+        <div className="df-modal-overlay" onClick={() => setItemsFor(null)}>
+          <div className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Item</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{itemsFor.name}</p>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Unit Price ($)</label>
-              <input type="number" step="0.01" value={itemForm.unitPrice} onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })} className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Product</label>
+                <select value={itemForm.productId} onChange={(e) => setItemForm({ ...itemForm, productId: e.target.value })} className="df-select">
+                  <option value="">Select product…</option>
+                  {products.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Unit price ($)</label>
+                <input type="number" step="0.01" value={itemForm.unitPrice} onChange={(e) => setItemForm({ ...itemForm, unitPrice: e.target.value })} className="df-input" placeholder="0.00" />
+              </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setItemsFor(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
-                Cancel
-              </button>
-              <button onClick={addItem} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Add
-              </button>
+            <div className="df-modal-footer">
+              <button onClick={() => setItemsFor(null)} className="btn btn-ghost">Cancel</button>
+              <button onClick={addItem} className="btn btn-primary">Add Item</button>
             </div>
           </div>
         </div>

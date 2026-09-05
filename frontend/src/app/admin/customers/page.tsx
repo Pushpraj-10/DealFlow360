@@ -2,9 +2,24 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { AlertCircle, Plus, Users } from 'lucide-react';
 
 type Tier = { _id: string; name: string };
-type Customer = { _id: string; name: string; company: string; email: string; tierId: { _id: string; name: string } | string; status: string };
+type Customer = {
+  _id: string;
+  name: string;
+  company: string;
+  email: string;
+  tierId: { _id: string; name: string } | string;
+  status: string;
+};
+
+function getStatusClass(status: string): string {
+  const s = status?.toLowerCase() ?? '';
+  if (s === 'active') return 'status-active';
+  if (s === 'inactive' || s === 'disabled') return 'status-cancelled';
+  return 'status-draft';
+}
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -17,7 +32,9 @@ export default function CustomersPage() {
     api
       .get<Customer[]>('/customers')
       .then(setCustomers)
-      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'));
+      .catch((err) =>
+        setError(err instanceof ApiClientError ? err.message : 'Failed to load customers')
+      );
     api.get<Tier[]>('/customer-tiers').then(setTiers).catch(() => {});
   };
 
@@ -36,81 +53,130 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Customers</h1>
-        <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm">
-          + Add Customer
+    <div className="df-page">
+      <div className="df-page-header">
+        <div>
+          <h1 className="df-page-title">Customers</h1>
+          <p className="df-page-subtitle">{customers.length} customer{customers.length !== 1 ? 's' : ''} in your workspace</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={13} />
+          Add Customer
         </button>
       </div>
 
-      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+      {error && (
+        <div className="df-alert df-alert-error">
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-600">
-              <th className="pb-2">Name</th>
-              <th className="pb-2">Company</th>
-              <th className="pb-2">Tier</th>
-              <th className="pb-2">Email</th>
-              <th className="pb-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map((c) => (
-              <tr key={c._id} className="border-b">
-                <td className="py-3 font-medium">{c.name}</td>
-                <td className="py-3">{c.company}</td>
-                <td className="py-3">{typeof c.tierId === 'object' ? c.tierId.name : c.tierId}</td>
-                <td className="py-3">{c.email}</td>
-                <td className="py-3">{c.status}</td>
-              </tr>
-            ))}
-            {customers.length === 0 && (
+      <div className="df-card">
+        {customers.length === 0 ? (
+          <div className="df-empty">
+            <Users size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
+            <div className="df-empty-title">No customers yet</div>
+            <div className="df-empty-desc">Add your first customer to start building your pipeline.</div>
+          </div>
+        ) : (
+          <table className="df-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="py-4 text-center text-gray-500">
-                  No customers yet.
-                </td>
+                <th>Customer</th>
+                <th>Company</th>
+                <th>Tier</th>
+                <th>Email</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {customers.map((c) => (
+                <tr key={c._id}>
+                  <td style={{ fontWeight: 500 }}>{c.name}</td>
+                  <td>{c.company}</td>
+                  <td>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-02)', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--border)' }}>
+                      {typeof c.tierId === 'object' ? c.tierId.name : c.tierId || '—'}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{c.email}</td>
+                  <td>
+                    <span className={`status-badge ${getStatusClass(c.status)}`}>{c.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
+      {/* Add Customer Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Add Customer</h2>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required className="w-full border rounded px-3 py-2" />
+        <div className="df-modal-overlay" onClick={() => setShowModal(false)}>
+          <form
+            onSubmit={handleCreate}
+            className="df-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="df-modal-header" style={{ marginBottom: 4 }}>
+              <h2 className="df-modal-title">Add Customer</h2>
             </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Company</label>
-              <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} required className="w-full border rounded px-3 py-2" />
+            <div className="df-modal-body">
+              <div className="df-field">
+                <label className="df-label">Full name</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                  className="df-input"
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div className="df-field">
+                <label className="df-label">Company</label>
+                <input
+                  value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })}
+                  required
+                  className="df-input"
+                  placeholder="Acme Corp"
+                />
+              </div>
+              <div className="df-field">
+                <label className="df-label">Email address</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                  className="df-input"
+                  placeholder="jane@acme.com"
+                />
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Customer tier</label>
+                <select
+                  value={form.tierId}
+                  onChange={(e) => setForm({ ...form, tierId: e.target.value })}
+                  required
+                  className="df-select"
+                >
+                  <option value="">Select tier…</option>
+                  {tiers.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required className="w-full border rounded px-3 py-2" />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-1">Tier</label>
-              <select value={form.tierId} onChange={(e) => setForm({ ...form, tierId: e.target.value })} required className="w-full border rounded px-3 py-2">
-                <option value="">Select tier...</option>
-                {tiers.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+            <div className="df-modal-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="btn btn-ghost">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Create
+              <button type="submit" className="btn btn-primary">
+                Create Customer
               </button>
             </div>
           </form>
