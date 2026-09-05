@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { TopNavigation } from './TopNavigation';
 import { UserMenu } from './UserMenu';
+import { ThemeToggle } from '../ThemeToggle';
 import { useAuth } from '@/lib/useAuth';
 import { Menu, MessageSquare, Quote, UserRound, X } from 'lucide-react';
 
@@ -57,7 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Profile
             </a>
           </nav>
-          {user && <UserMenu user={user} onLogout={logout} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {user && <UserMenu user={user} onLogout={logout} />}
+          </div>
         </header>
         <main className="portal-main">{children}</main>
       </div>
@@ -144,6 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu size={17} />
             </button>
             <div className="topbar-spacer" />
+            <ThemeToggle />
             <UserMenu user={user} onLogout={logout} />
           </header>
           <main className="app-main-content">{children}</main>

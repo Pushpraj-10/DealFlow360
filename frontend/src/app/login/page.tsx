@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { ApiClientError } from '@/lib/api';
 import { ArrowRight, AlertCircle } from 'lucide-react';
 
@@ -121,8 +122,13 @@ export default function LoginPage() {
           justifyContent: 'center',
           background: 'var(--bg)',
           padding: '48px 24px',
+          position: 'relative',
         }}
       >
+        <div style={{ position: 'absolute', top: 24, right: 24 }}>
+          <ThemeToggle />
+        </div>
+        
         <div style={{ width: '100%', maxWidth: 380 }}>
           <div style={{ marginBottom: 36 }}>
             <h2

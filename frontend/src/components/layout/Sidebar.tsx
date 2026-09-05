@@ -15,6 +15,7 @@ import {
   Users,
   Warehouse,
 } from 'lucide-react';
+import { ThemeToggle } from '../ThemeToggle';
 
 type NavItem = {
   label: string;
@@ -102,6 +103,10 @@ export function Sidebar() {
             </nav>
           </section>
         ))}
+      </div>
+
+      <div style={{ padding: '12px 8px', borderTop: '1px solid var(--sidebar-border)' }}>
+        <ThemeToggle />
       </div>
     </aside>
   );

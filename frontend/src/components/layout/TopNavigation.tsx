@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { CurrentUser } from '@/lib/api';
 import { UserMenu } from './UserMenu';
+import { ThemeToggle } from '../ThemeToggle';
 
 type NavItem = {
   label: string;
@@ -94,6 +95,7 @@ export function TopNavigation({
           </nav>
 
           <div className="top-navigation-actions">
+            <ThemeToggle />
             <button className="icon-button" title="Notifications" aria-label="Notifications">
               <Bell size={16} />
             </button>

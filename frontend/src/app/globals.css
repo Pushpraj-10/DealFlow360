@@ -4,12 +4,15 @@
 @import "tailwindcss";
 
 /* ─── Design Tokens ──────────────────────────────────────────────────────── */
+
+/* Light Mode (default fallback) */
 :root {
   /* Surfaces */
   --bg:          #F7F8FB;
   --surface-01:  #FFFFFF;
   --surface-02:  #F3F5FA;
   --surface-03:  #E9ECF5;
+  --surface-subtle: var(--surface-subtle);
 
   /* Borders */
   --border:        #E5E8F0;
@@ -67,6 +70,61 @@
   --transition-fast: 100ms cubic-bezier(0.4,0,0.2,1);
 }
 
+/* Dark Mode - Default */
+[data-theme="dark"] {
+  /* Surfaces */
+  --bg:          #0A0E17;
+  --surface-01:  #12161F;
+  --surface-02:  #1A1F2B;
+  --surface-03:  #242936;
+  --surface-subtle: #1A1F2B;
+
+  /* Borders */
+  --border:        #2A2F3C;
+  --border-strong: #363C4A;
+
+  /* Text */
+  --text-primary:   #E8EAED;
+  --text-secondary: #9BA1B0;
+  --text-tertiary:  #6B7280;
+  --text-inverse:   #0A0E17;
+
+  /* Accent */
+  --accent:       #5B7CFF;
+  --accent-hover: #4A6BEE;
+  --accent-light: #1A2440;
+  --accent-muted: #2D3E6F;
+
+  /* Semantic */
+  --green:        #22C55E;
+  --green-light:  #0F2419;
+  --green-muted:  #1A4028;
+  --amber:        #F59E0B;
+  --amber-light:  #2A1F0A;
+  --amber-muted:  #4A3614;
+  --red:          #EF4444;
+  --red-light:    #2A0F0F;
+  --red-muted:    #4A1C1C;
+  --blue:         #3B82F6;
+  --blue-light:   #0F1A2E;
+  --blue-muted:   #1A2E50;
+
+  /* Sidebar */
+  --sidebar-bg:          #12161F;
+  --sidebar-border:      #2A2F3C;
+  --sidebar-text:        #C1C7D3;
+  --sidebar-muted:       #6B7280;
+  --sidebar-active-bg:   #1A2440;
+  --sidebar-active-text: #5B7CFF;
+  --sidebar-hover-bg:    #1A1F2B;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.2);
+  --shadow:    0 1px 3px 0 rgba(0,0,0,0.3), 0 1px 2px -1px rgba(0,0,0,0.2);
+  --shadow-md: 0 8px 20px -14px rgba(0,0,0,0.5);
+  --shadow-lg: 0 18px 40px -22px rgba(0,0,0,0.6);
+}
+
 /* ─── Base Reset ─────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -77,6 +135,20 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Smooth theme transitions */
+html,
+body,
+.df-card,
+.df-table-wrap,
+.btn,
+.df-input,
+.df-select,
+.admin-sidebar,
+.top-navigation,
+.sidebar-bg {
+  transition: background-color var(--transition), color var(--transition), border-color var(--transition);
 }
 
 body {
@@ -180,7 +252,7 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   letter-spacing: 0;
   border-bottom: 1px solid var(--border);
-  background: #FAFBFF;
+  background: var(--surface-02);
   white-space: nowrap;
 }
 
@@ -659,7 +731,7 @@ h1, h2, h3, h4, h5, h6 {
   top: 0;
   z-index: 20;
   height: 58px;
-  background: rgba(255,255,255,0.92);
+  background: var(--surface-01);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(14px);
 }
@@ -906,7 +978,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   gap: 18px;
   padding: 0 30px;
-  background: rgba(255,255,255,0.94);
+  background: var(--surface-01);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(14px);
   position: sticky;
@@ -1099,7 +1171,7 @@ h1, h2, h3, h4, h5, h6 {
 .sales-stage-summary {
   min-height: 92px;
   padding: 13px 14px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   display: flex;
@@ -1136,7 +1208,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 12px 13px;
   color: inherit;
   text-decoration: none;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -1206,7 +1278,7 @@ h1, h2, h3, h4, h5, h6 {
 .sales-empty-line,
 .sales-empty-state {
   border: 1px dashed var(--border-strong);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border-radius: var(--radius-md);
   padding: 22px;
   text-align: center;
@@ -1430,7 +1502,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: flex-end;
   align-items: baseline;
   gap: 12px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border-top: 1px solid var(--border);
 }
 
@@ -1593,7 +1665,7 @@ h1, h2, h3, h4, h5, h6 {
 .sales-customer-context > div,
 .sales-negotiation-summary > div {
   padding: 14px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
@@ -1709,7 +1781,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .sales-negotiation-terms > div {
   padding: 12px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
@@ -1946,7 +2018,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .manager-commercial-grid > div {
   padding: 13px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
@@ -2378,7 +2450,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .ops-list-item strong,
@@ -2435,7 +2507,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .ops-billing-item span,
@@ -2460,7 +2532,7 @@ h1, h2, h3, h4, h5, h6 {
   text-align: center;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .ops-inline-create {
@@ -2565,7 +2637,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .ops-allocation-summary > div {
   padding: 12px;
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
@@ -2606,7 +2678,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .ops-allocation-card-head {
@@ -2815,7 +2887,7 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .ops-payment-balance span,
@@ -2934,7 +3006,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .portal-quote-row:hover {
-  background: #FAFBFF;
+  background: var(--surface-subtle);
   border-color: var(--accent-muted);
 }
 
@@ -2981,7 +3053,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .portal-empty svg {
@@ -3118,7 +3190,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 13px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .portal-message > div {
@@ -3163,7 +3235,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #FAFBFF;
+  background: var(--surface-subtle);
 }
 
 .portal-modal-header {
