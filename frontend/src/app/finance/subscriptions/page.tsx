@@ -1,165 +1,161 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { api, ApiClientError } from '@/lib/api';
 
-// Mock data based on the PRD
-const mockSubscriptionOrder = {
-  id: 'ORD-2099',
-  customer: 'Beta Industries',
-  status: 'Active',
-  oneTimeLines: [
-    { id: 'L1', product: 'Hardware Router X1', qty: 2, price: 500.00, invoiced: true }
-  ],
-  recurringLines: [
-    { 
-      id: 'S1', 
-      product: 'Premium Support SLA', 
-      plan: 'Monthly', 
-      qty: 2, 
-      unitPrice: 150.00, 
-      nextBillDate: '2026-10-01',
-      status: 'Active'
-    }
-  ]
+type Subscription = {
+  _id: string;
+  customer_id: string;
+  plan_id: { _id: string; name: string; cycle: string } | string;
+  status: string;
+  qty: number;
+  recurring_unit_price_cents: number;
+  next_bill_date: string;
 };
 
-export default function SubscriptionsPage() {
-  const [selectedSub, setSelectedSub] = useState(mockSubscriptionOrder.recurringLines[0]);
-  const [showModifyModal, setShowModifyModal] = useState(false);
-  const [modifyQty, setModifyQty] = useState(selectedSub.qty);
+function money(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
 
-  const calculateProration = (oldQty: number, newQty: number) => {
-    // Mock 15 days remaining in a 30 day month
-    const remainingFraction = 15 / 30;
-    const oldTotal = oldQty * selectedSub.unitPrice;
-    const newTotal = newQty * selectedSub.unitPrice;
-    const delta = (newTotal - oldTotal) * remainingFraction;
-    return delta;
+export default function SubscriptionsPage() {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Subscription | null>(null);
+  const [newQty, setNewQty] = useState(1);
+  const [prorationPreview, setProrationPreview] = useState<number | null>(null);
+
+  const load = () => {
+    api
+      .get<Subscription[]>('/subscriptions')
+      .then(setSubs)
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load subscriptions'));
   };
 
-  const prorationDelta = calculateProration(selectedSub.qty, modifyQty);
+  useEffect(load, []);
 
-  const handleConfirmModify = () => {
-    setSelectedSub({ ...selectedSub, qty: modifyQty });
-    setShowModifyModal(false);
+  const openModify = (sub: Subscription) => {
+    setSelected(sub);
+    setNewQty(sub.qty);
+    setProrationPreview(null);
+  };
+
+  useEffect(() => {
+    if (!selected) return;
+    api
+      .get<{ proratedDeltaCents: number }>(`/billing/prorate?subscriptionId=${selected._id}&newQty=${newQty}`)
+      .then((d) => setProrationPreview(d.proratedDeltaCents))
+      .catch(() => setProrationPreview(null));
+  }, [selected, newQty]);
+
+  const confirmModify = async () => {
+    if (!selected) return;
+    try {
+      await api.post(`/subscriptions/${selected._id}/modify`, { newQty });
+      setSelected(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Modify failed');
+    }
+  };
+
+  const cancelSub = async (id: string) => {
+    try {
+      await api.post(`/subscriptions/${id}/cancel`, { reason: 'Cancelled from portal' });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Cancel failed');
+    }
   };
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Subscriptions & Billing</h1>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Subscriptions & Billing</h1>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <h2 className="text-lg font-semibold mb-4 text-gray-800">Order {mockSubscriptionOrder.id} - {mockSubscriptionOrder.customer}</h2>
-        
-        <div className="mb-6">
-          <h3 className="text-sm uppercase text-gray-500 font-bold mb-3 border-b pb-2">One-Time Lines</h3>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-gray-600">
-                <th className="pb-2">Product</th>
-                <th className="pb-2">Qty</th>
-                <th className="pb-2">Total Price</th>
-                <th className="pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockSubscriptionOrder.oneTimeLines.map(line => (
-                <tr key={line.id} className="border-t">
-                  <td className="py-2">{line.product}</td>
-                  <td className="py-2">{line.qty}</td>
-                  <td className="py-2">${(line.qty * line.price).toFixed(2)}</td>
-                  <td className="py-2">
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">{line.invoiced ? 'Invoiced' : 'Pending'}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
 
-        <div>
-          <h3 className="text-sm uppercase text-gray-500 font-bold mb-3 border-b pb-2">Recurring Subscriptions</h3>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-gray-600">
-                <th className="pb-2">Plan / Product</th>
-                <th className="pb-2">Cycle</th>
-                <th className="pb-2">Qty</th>
-                <th className="pb-2">Unit Price</th>
-                <th className="pb-2">Next Bill Date</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t">
-                <td className="py-3 font-medium text-blue-600">{selectedSub.product}</td>
-                <td className="py-3">{selectedSub.plan}</td>
-                <td className="py-3">{selectedSub.qty}</td>
-                <td className="py-3">${selectedSub.unitPrice.toFixed(2)}</td>
-                <td className="py-3">{selectedSub.nextBillDate}</td>
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="text-gray-600">
+              <th className="pb-2">Plan</th>
+              <th className="pb-2">Qty</th>
+              <th className="pb-2">Unit Price</th>
+              <th className="pb-2">Next Bill Date</th>
+              <th className="pb-2">Status</th>
+              <th className="pb-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {subs.map((s) => (
+              <tr key={s._id} className="border-t">
+                <td className="py-3 font-medium text-blue-600">{typeof s.plan_id === 'object' ? s.plan_id.name : s.plan_id}</td>
+                <td className="py-3">{s.qty}</td>
+                <td className="py-3">{money(s.recurring_unit_price_cents)}</td>
+                <td className="py-3">{new Date(s.next_bill_date).toLocaleDateString()}</td>
                 <td className="py-3">
-                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">{selectedSub.status}</span>
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${s.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {s.status}
+                  </span>
                 </td>
                 <td className="py-3 text-right space-x-2">
-                  <button 
-                    onClick={() => setShowModifyModal(true)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Modify
-                  </button>
-                  <button className="text-red-600 hover:underline">Cancel</button>
+                  {s.status === 'ACTIVE' && (
+                    <>
+                      <button onClick={() => openModify(s)} className="text-blue-600 hover:underline">
+                        Modify
+                      </button>
+                      <button onClick={() => cancelSub(s._id)} className="text-red-600 hover:underline">
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {subs.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-4 text-center text-gray-500">
+                  No subscriptions.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {showModifyModal && (
+      {selected && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg w-96">
             <h2 className="text-xl font-bold mb-4">Modify Subscription</h2>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">New Quantity</label>
-              <input 
-                type="number" 
-                value={modifyQty} 
-                onChange={(e) => setModifyQty(parseInt(e.target.value) || 0)}
+              <input
+                type="number"
+                min={1}
+                value={newQty}
+                onChange={(e) => setNewQty(parseInt(e.target.value) || 1)}
                 className="w-full border rounded px-3 py-2"
-                min="1"
               />
             </div>
-            
+
             <div className="bg-gray-50 p-3 rounded text-sm mb-6 border border-gray-200">
               <div className="flex justify-between mb-1">
-                <span className="text-gray-600">Remaining Days in Cycle:</span>
-                <span className="font-medium">15</span>
-              </div>
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-600">Prorated {prorationDelta >= 0 ? 'Charge' : 'Credit'}:</span>
-                <span className={`font-medium ${prorationDelta >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  ${Math.abs(prorationDelta).toFixed(2)}
+                <span className="text-gray-600">Prorated {((prorationPreview ?? 0) >= 0 ? 'Charge' : 'Credit')}:</span>
+                <span className={`font-medium ${(prorationPreview ?? 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {prorationPreview !== null ? money(Math.abs(prorationPreview)) : '...'}
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                This amount will be applied to the next invoice immediately based on the mid-cycle proration policy.
+                Applied immediately per the plan&apos;s proration policy.
               </p>
             </div>
 
             <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setShowModifyModal(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-              >
+              <button onClick={() => setSelected(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
                 Close
               </button>
-              <button 
-                onClick={handleConfirmModify}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
+              <button onClick={confirmModify} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                 Confirm Changes
               </button>
             </div>

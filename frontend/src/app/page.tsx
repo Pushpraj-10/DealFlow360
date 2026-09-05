@@ -1,69 +1,82 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useEffect, useState } from 'react';
+import { api, ApiClientError } from '@/lib/api';
+
+type DashboardData = {
+  quotationsByStatus: { _id: string; count: number }[];
+  invoicesByStatus: { _id: string; count: number }[];
+  activeSubscriptions: number;
+  invoiceTotals: { total_cents: number; paid_cents: number };
+  openAlertsCount: number;
+  openAlertsByType: Record<string, number>;
+};
+
+function money(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<DashboardData>('/dashboard')
+      .then(setData)
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load dashboard'));
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-8 max-w-6xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+
+      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+
+      {!data && !error && <p className="text-gray-500">Loading...</p>}
+
+      {data && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+            <p className="text-sm text-gray-500 mb-1">Active Subscriptions</p>
+            <p className="text-3xl font-bold text-gray-900">{data.activeSubscriptions}</p>
+          </div>
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+            <p className="text-sm text-gray-500 mb-1">Open Deal Alerts</p>
+            <p className="text-3xl font-bold text-gray-900">{data.openAlertsCount}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {Object.entries(data.openAlertsByType).map(([k, v]) => `${k}: ${v}`).join(' - ') || 'None'}
+            </p>
+          </div>
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+            <p className="text-sm text-gray-500 mb-1">Invoiced / Paid</p>
+            <p className="text-3xl font-bold text-gray-900">{money(data.invoiceTotals.total_cents)}</p>
+            <p className="text-xs text-gray-400 mt-1">{money(data.invoiceTotals.paid_cents)} collected</p>
+          </div>
+
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 md:col-span-3">
+            <h2 className="text-sm uppercase text-gray-500 font-bold mb-3">Quotations by Status</h2>
+            <div className="flex gap-3 flex-wrap">
+              {data.quotationsByStatus.map((row) => (
+                <span key={row._id} className="px-3 py-1 bg-gray-100 rounded text-sm">
+                  {row._id}: <strong>{row.count}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 md:col-span-3">
+            <h2 className="text-sm uppercase text-gray-500 font-bold mb-3">Invoices by Status</h2>
+            <div className="flex gap-3 flex-wrap">
+              {data.invoicesByStatus.map((row) => (
+                <span key={row._id} className="px-3 py-1 bg-gray-100 rounded text-sm">
+                  {row._id}: <strong>{row.count}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      )}
     </div>
   );
 }

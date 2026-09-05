@@ -1,153 +1,193 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { api, ApiClientError } from '@/lib/api';
 
-// Mock data based on the PRD for demonstration
-const mockOrder = {
-  id: 'ORD-1042',
-  customer: 'Acme Corp',
-  status: 'Pending Fulfillment',
-  lines: [
-    { id: 'L1', product: 'Enterprise Server Rack', requestedQty: 10, fulfilledQty: 0, backorderQty: 0 },
-    { id: 'L2', product: 'Networking Switch 48-port', requestedQty: 25, fulfilledQty: 0, backorderQty: 0 }
-  ]
+type Fulfillment = { _id: string; quotation_id: string; status: string; created_at: string };
+type Allocation = {
+  _id: string;
+  warehouse_id: string;
+  allocated_qty: number;
+  shipped_qty: number;
+  status: string;
+  quote_line_id?: { productId?: { name?: string }; variantId?: { sku?: string } };
 };
-
-const mockSuggestedSplit = [
-  { warehouse: 'Main Warehouse', product: 'Enterprise Server Rack', qty: 10, estCost: 150.00 },
-  { warehouse: 'Main Warehouse', product: 'Networking Switch 48-port', qty: 20, estCost: 50.00 },
-  { warehouse: 'East Depot', product: 'Networking Switch 48-port', qty: 5, estCost: 25.00 }
-];
+type Backorder = { _id: string; qty: number; status: string };
+type Detail = { fulfillment: Fulfillment; allocations: Allocation[]; backorders: Backorder[] };
 
 export default function FulfillmentPage() {
-  const [isOverrideMode, setIsOverrideMode] = useState(false);
-  const [status, setStatus] = useState('Pending');
+  const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [newQuotationId, setNewQuotationId] = useState('');
+  const [shipQty, setShipQty] = useState<Record<string, string>>({});
 
-  const handleAcceptSplit = () => {
-    setStatus('Split Accepted & Reserved');
+  const loadList = () => {
+    api
+      .get<Fulfillment[]>('/fulfillments')
+      .then(setFulfillments)
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load fulfillments'));
+  };
+
+  const loadDetail = (id: string) => {
+    api
+      .get<Detail>(`/fulfillments/${id}`)
+      .then(setDetail)
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load detail'));
+  };
+
+  useEffect(loadList, []);
+  useEffect(() => {
+    if (selectedId) loadDetail(selectedId);
+  }, [selectedId]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const created = await api.post<Fulfillment>('/fulfillments', { quotation_id: newQuotationId });
+      setNewQuotationId('');
+      loadList();
+      setSelectedId(created._id);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to create fulfillment');
+    }
+  };
+
+  const runAction = async (action: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await action();
+      if (selectedId) loadDetail(selectedId);
+      loadList();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Action failed');
+    }
   };
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Fulfillment & Warehouse Split</h1>
-        <span className={`px-4 py-1 rounded-full text-sm font-medium ${status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-          {status}
-        </span>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
-        <h2 className="text-lg font-semibold mb-4 text-gray-800">Order {mockOrder.id} - {mockOrder.customer}</h2>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b text-gray-600 text-sm">
-              <th className="pb-2 font-medium">Product</th>
-              <th className="pb-2 font-medium">Requested Qty</th>
-              <th className="pb-2 font-medium">Fulfilled Qty</th>
-              <th className="pb-2 font-medium">Backorder Qty</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {mockOrder.lines.map((line) => (
-              <tr key={line.id} className="border-b last:border-0">
-                <td className="py-3">{line.product}</td>
-                <td className="py-3">{line.requestedQty}</td>
-                <td className="py-3">{line.fulfilledQty}</td>
-                <td className="py-3 text-red-500">{line.backorderQty}</td>
-              </tr>
+      {error && <div className="mb-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">{error}</div>}
+
+      <form onSubmit={handleCreate} className="flex gap-2 mb-6">
+        <input
+          value={newQuotationId}
+          onChange={(e) => setNewQuotationId(e.target.value)}
+          placeholder="Quotation ID"
+          className="border rounded px-3 py-2 text-sm flex-1"
+        />
+        <button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Create Fulfillment</button>
+      </form>
+
+      <div className="grid grid-cols-3 gap-6">
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 col-span-1">
+          <h2 className="text-sm uppercase text-gray-500 font-bold mb-3">Fulfillments</h2>
+          <ul className="space-y-1 text-sm">
+            {fulfillments.map((f) => (
+              <li key={f._id}>
+                <button
+                  onClick={() => setSelectedId(f._id)}
+                  className={`w-full text-left px-2 py-2 rounded hover:bg-gray-100 ${selectedId === f._id ? 'bg-blue-50 text-blue-700' : ''}`}
+                >
+                  <div className="font-medium">{f._id.slice(-6)}</div>
+                  <div className="text-xs text-gray-500">{f.status}</div>
+                </button>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">System Suggested Split</h2>
-          {!isOverrideMode && status === 'Pending' && (
-            <button 
-              onClick={() => setIsOverrideMode(true)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Manual Override
-            </button>
+        <div className="col-span-2">
+          {!detail && <p className="text-gray-500">Select a fulfillment.</p>}
+          {detail && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-800">Status: {detail.fulfillment.status}</h2>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => runAction(() => api.post(`/fulfillments/${selectedId}/suggest`))}
+                    className="px-3 py-1 bg-gray-800 text-white rounded text-sm"
+                  >
+                    Suggest Split
+                  </button>
+                  <button
+                    onClick={() => runAction(() => api.post(`/fulfillments/${selectedId}/accept`))}
+                    className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+                  >
+                    Accept Suggested Split
+                  </button>
+                </div>
+              </div>
+
+              <table className="w-full text-left text-sm mb-6">
+                <thead>
+                  <tr className="border-b text-gray-600">
+                    <th className="pb-2">Product</th>
+                    <th className="pb-2">Warehouse</th>
+                    <th className="pb-2">Allocated</th>
+                    <th className="pb-2">Shipped</th>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2">Ship</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.allocations.map((a) => (
+                    <tr key={a._id} className="border-t">
+                      <td className="py-2">{a.quote_line_id?.productId?.name || a.quote_line_id?.variantId?.sku || '-'}</td>
+                      <td className="py-2">{a.warehouse_id}</td>
+                      <td className="py-2">{a.allocated_qty}</td>
+                      <td className="py-2">{a.shipped_qty}</td>
+                      <td className="py-2">{a.status}</td>
+                      <td className="py-2">
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            className="w-16 border rounded px-1 text-xs"
+                            value={shipQty[a._id] || ''}
+                            onChange={(e) => setShipQty({ ...shipQty, [a._id]: e.target.value })}
+                          />
+                          <button
+                            onClick={() =>
+                              runAction(() =>
+                                api.post(`/fulfillments/${selectedId}/ship`, {
+                                  allocation_id: a._id,
+                                  qty: Number(shipQty[a._id] || 0),
+                                })
+                              )
+                            }
+                            className="text-blue-600 hover:underline text-xs"
+                          >
+                            Ship
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {detail.backorders.length > 0 && (
+                <div>
+                  <h3 className="text-sm uppercase text-gray-500 font-bold mb-2">Backorders</h3>
+                  <ul className="text-sm space-y-1">
+                    {detail.backorders.map((b) => (
+                      <li key={b._id} className="flex justify-between border-b py-1">
+                        <span>Qty {b.qty}</span>
+                        <span className="text-red-600">{b.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
-
-        <div className="bg-blue-50 border border-blue-100 rounded p-4 mb-6">
-          <p className="text-sm text-blue-800">
-            <strong>Recommendation rationale:</strong> Minimized shipping shipments across 2 warehouses. Lowest estimated cost to fulfill available stock.
-          </p>
-        </div>
-
-        <table className="w-full text-left border-collapse mb-6">
-          <thead>
-            <tr className="border-b text-gray-600 text-sm">
-              <th className="pb-2 font-medium">Warehouse</th>
-              <th className="pb-2 font-medium">Product</th>
-              <th className="pb-2 font-medium">Allocated Qty</th>
-              <th className="pb-2 font-medium">Est. Shipping Cost</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {mockSuggestedSplit.map((split, idx) => (
-              <tr key={idx} className="border-b last:border-0">
-                <td className="py-3 font-medium">{split.warehouse}</td>
-                <td className="py-3">{split.product}</td>
-                <td className="py-3">
-                  {isOverrideMode ? (
-                    <input type="number" defaultValue={split.qty} className="border rounded px-2 py-1 w-20" />
-                  ) : (
-                    split.qty
-                  )}
-                </td>
-                <td className="py-3">${split.estCost.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {status === 'Pending' && (
-          <div className="flex gap-4">
-            {isOverrideMode ? (
-              <>
-                <button 
-                  onClick={() => { setStatus('Manual Override Applied'); setIsOverrideMode(false); }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700"
-                >
-                  Save Override
-                </button>
-                <button 
-                  onClick={() => setIsOverrideMode(false)}
-                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={handleAcceptSplit}
-                className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700"
-              >
-                Accept Suggested Split
-              </button>
-            )}
-          </div>
-        )}
-
       </div>
-      
-      {/* Backorder Consolidate Prompt Simulation */}
-      {status !== 'Pending' && (
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded p-4 flex justify-between items-center">
-          <div>
-            <h3 className="text-sm font-bold text-yellow-800">Consolidate Remaining Backorder</h3>
-            <p className="text-sm text-yellow-700">New stock arrived at East Depot for pending backorders on ORD-1042.</p>
-          </div>
-          <button className="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 shadow-sm">
-            Review Consolidation
-          </button>
-        </div>
-      )}
     </div>
   );
 }

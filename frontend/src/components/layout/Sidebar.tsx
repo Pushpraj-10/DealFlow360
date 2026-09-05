@@ -2,15 +2,30 @@ import Link from 'next/link';
 
 export function Sidebar() {
   return (
-    <div className='w-64 bg-gray-900 text-white min-h-screen p-4'>
-      <h2 className='text-xl font-bold mb-6'>DealFlow360</h2>
+    <div className='w-64 bg-gray-900 text-white min-h-screen p-4 overflow-y-auto'>
+      <Link href='/'><h2 className='text-xl font-bold mb-6'>DealFlow360</h2></Link>
       <div className='space-y-4'>
+        <div>
+          <h3 className='text-sm uppercase text-gray-400 mb-2'>Sales</h3>
+          <ul className='space-y-1 text-sm'>
+            <li><Link href='/sales/quotations' className='hover:text-blue-400'>Quotations</Link></li>
+            <li><Link href='/sales/approvals' className='hover:text-blue-400'>Approvals Queue</Link></li>
+          </ul>
+        </div>
         <div>
           <h3 className='text-sm uppercase text-gray-400 mb-2'>Admin</h3>
           <ul className='space-y-1 text-sm'>
             <li><Link href='/admin/warehouses' className='hover:text-blue-400'>Warehouses</Link></li>
             <li><Link href='/admin/inventory' className='hover:text-blue-400'>Inventory</Link></li>
             <li><Link href='/admin/subscription-plans' className='hover:text-blue-400'>Subscription Plans</Link></li>
+            <li><Link href='/admin/categories' className='hover:text-blue-400'>Categories</Link></li>
+            <li><Link href='/admin/customer-tiers' className='hover:text-blue-400'>Customer Tiers</Link></li>
+            <li><Link href='/admin/customers' className='hover:text-blue-400'>Customers</Link></li>
+            <li><Link href='/admin/products' className='hover:text-blue-400'>Products</Link></li>
+            <li><Link href='/admin/price-lists' className='hover:text-blue-400'>Price Lists</Link></li>
+            <li><Link href='/admin/discount-rules' className='hover:text-blue-400'>Discount Rules</Link></li>
+            <li><Link href='/admin/approval-rules' className='hover:text-blue-400'>Approval Rules</Link></li>
+            <li><Link href='/admin/system-status' className='hover:text-blue-400'>System Status</Link></li>
           </ul>
         </div>
         <div>
