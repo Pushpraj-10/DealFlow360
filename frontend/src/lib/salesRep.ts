@@ -27,6 +27,8 @@ export type QuotationListItem = {
   total?: number;
   amount?: number;
   grandTotal?: number;
+  currentVersion?: number;
+  confirmedVersion?: number;
   approvalStatus?: string;
   approvalState?: string;
   riskSeverity?: string;

@@ -60,7 +60,6 @@ export default function ReportsPage() {
   }, [period, repId, team, approvalStatus, productId, categoryId]);
 
   useEffect(() => {
-    setReport(null);
     api
       .get<Report>(`/reports/sales?${queryString}`)
       .then(setReport)

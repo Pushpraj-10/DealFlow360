@@ -33,7 +33,6 @@ export default function BackordersPage() {
   };
 
   const open = backorders.filter((b) => b.status !== 'RESOLVED');
-  const resolved = backorders.filter((b) => b.status === 'RESOLVED');
 
   return (
     <div className="df-page backorders-page">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import {
@@ -56,7 +56,7 @@ export default function CustomersPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', company: '', email: '', tierId: '' });
 
-  const load = () => {
+  const load = useCallback(() => {
     api
       .get<{ customers: Customer[] }>('/customers')
       .then((d) => {
@@ -69,9 +69,9 @@ export default function CustomersPage() {
       api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
     }
     api.get<{ quotations: QuotationListItem[] }>('/quotations').then((d) => setQuotations(d.quotations.map(normalizeQuotationCard))).catch(() => {});
-  };
+  }, [canCreate]);
 
-  useEffect(load, []);
+  useEffect(load, [load]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

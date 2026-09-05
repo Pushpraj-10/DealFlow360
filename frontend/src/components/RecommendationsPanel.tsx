@@ -64,8 +64,11 @@ export function RecommendationsPanel({ quotationId, onRecommendationAdded }: Rec
 
   useEffect(() => {
     if (quotationId) {
-      loadRecommendations();
+      queueMicrotask(() => {
+        loadRecommendations();
+      });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotationId]);
 
   const handleAddRecommendation = async (productId: string) => {
@@ -127,7 +130,7 @@ export function RecommendationsPanel({ quotationId, onRecommendationAdded }: Rec
       <div className="recommendations-header">
         <div>
           <h3 className="quotation-section-title">Recommended for this deal</h3>
-          <p className="recommendations-subtitle">Based on this quotation's products and customer profile</p>
+          <p className="recommendations-subtitle">Based on this quotation&apos;s products and customer profile</p>
         </div>
       </div>
 

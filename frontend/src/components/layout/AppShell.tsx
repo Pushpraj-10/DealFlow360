@@ -21,11 +21,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
   useEffect(() => {
-    try {
-      setRail(window.localStorage.getItem(RAIL_STORAGE_KEY) === '1');
-    } catch {
-      // Storage can be unavailable in private windows; the default is fine.
-    }
+    queueMicrotask(() => {
+      try {
+        setRail(window.localStorage.getItem(RAIL_STORAGE_KEY) === '1');
+      } catch {
+        // Storage can be unavailable in private windows; the default is fine.
+      }
+    });
   }, []);
 
   const toggleRail = () => {
@@ -42,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
-    setDrawerOpen(false);
+    queueMicrotask(() => setDrawerOpen(false));
   }, [pathname]);
 
   useEffect(() => {
