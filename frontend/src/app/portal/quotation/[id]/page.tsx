@@ -3,13 +3,24 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, FileText } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText } from 'lucide-react';
+
+type PortalLine = {
+  id: string;
+  product: { name: string; description?: string } | null;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  lineTotal: number;
+};
 
 type PortalQuotation = {
   id: string;
   quoteNumber: string;
   status: string;
   currencyCode: string;
+  totals: { subtotal: number; totalDiscount: number; tax: number; grandTotal: number };
+  lines: PortalLine[];
   createdAt: string;
   updatedAt: string;
 };
@@ -29,15 +40,38 @@ export default function PortalQuotationPage() {
   const params = useParams<{ id: string }>();
   const [quotation, setQuotation] = useState<PortalQuotation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     api
       .get<{ quotation: PortalQuotation }>(`/quotations/portal/${params.id}`)
       .then((d) => setQuotation(d.quotation))
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load quotation')
       );
-  }, [params.id]);
+  };
+
+  useEffect(load, [params.id]);
+
+  const canConfirm = quotation
+    ? ['APPROVED', 'READY_FOR_CUSTOMER', 'SENT_TO_CUSTOMER'].includes(quotation.status)
+    : false;
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await api.post(`/quotations/${params.id}/confirm`);
+      setInfo('Quotation confirmed — your DealFlow360 rep will follow up on next steps.');
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to confirm quotation');
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   return (
     <div>
@@ -45,6 +79,12 @@ export default function PortalQuotationPage() {
         <div className="df-alert df-alert-error" style={{ marginBottom: 20 }}>
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
           <span>{error}</span>
+        </div>
+      )}
+      {info && (
+        <div className="df-alert df-alert-success" style={{ marginBottom: 20 }}>
+          <CheckCircle size={14} style={{ flexShrink: 0 }} />
+          <span>{info}</span>
         </div>
       )}
 
@@ -121,20 +161,88 @@ export default function PortalQuotationPage() {
             </div>
           </div>
 
-          {/* Note */}
+          {/* Lines */}
           <div
             style={{
-              background: 'var(--surface-02)',
+              background: '#fff',
               border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
-              padding: '14px 18px',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              marginBottom: 16,
             }}
           >
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Line-level comments, counter-discount proposals, and one-click confirmation are part
-              of the negotiation module, currently in development.
-            </p>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
+              Line Items
+            </div>
+            <table className="df-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th style={{ textAlign: 'center' }}>Qty</th>
+                  <th style={{ textAlign: 'right' }}>Unit Price</th>
+                  <th style={{ textAlign: 'center' }}>Discount</th>
+                  <th style={{ textAlign: 'right' }}>Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quotation.lines.map((l) => (
+                  <tr key={l.id}>
+                    <td style={{ fontWeight: 500 }}>{l.product?.name ?? '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{l.quantity}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>${l.unitPrice.toFixed(2)}</td>
+                    <td style={{ textAlign: 'center' }}>{l.discountPercent}%</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>${l.lineTotal.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 14, marginTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                  Grand Total
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                  {quotation.currencyCode} {quotation.totals.grandTotal.toFixed(2)}
+                </div>
+              </div>
+            </div>
           </div>
+
+          {canConfirm ? (
+            <div
+              style={{
+                background: 'var(--surface-02)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                Review the quotation above, then confirm to accept these terms.
+              </p>
+              <button onClick={handleConfirm} disabled={confirming} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                {confirming ? 'Confirming…' : 'Confirm Quotation'}
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: 'var(--surface-02)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 18px',
+              }}
+            >
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                Line-level comments and counter-discount proposals are part of the negotiation module,
+                currently in development.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

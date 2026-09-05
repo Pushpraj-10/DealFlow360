@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, CheckCircle, Plus, AlertTriangle, ChevronRight, FileText } from 'lucide-react';
 
 type Customer = { _id: string; name: string; company: string };
@@ -41,6 +42,8 @@ function getRiskClass(risk: string): string {
 }
 
 export default function QuotationsPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'SALES_REP' || user?.role === 'ADMIN';
   const [quotations, setQuotations] = useState<QuotationListItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -123,9 +126,34 @@ export default function QuotationsPage() {
     }
   };
 
+  const handleSend = async () => {
+    if (!selectedId) return;
+    setError(null);
+    setInfo(null);
+    try {
+      await api.post(`/quotations/${selectedId}/send`);
+      setInfo('Sent to customer — they can now review and confirm it from their portal.');
+      loadQuotations();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to send quotation to customer');
+    }
+  };
+
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
   const grandTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   const hasViolations = lines.some((l) => l.is_violation);
+  // Mirrors the backend's own state-transition guards (quotations.controller.js):
+  // submit only from DRAFT/RETURNED_FOR_REVISION/REAPPROVAL_REQUIRED, send only
+  // from APPROVED/READY_FOR_CUSTOMER, and lines can't be edited once terminal.
+  const canSubmit = canEdit && selectedQuotation
+    ? ['DRAFT', 'RETURNED_FOR_REVISION', 'REAPPROVAL_REQUIRED'].includes(selectedQuotation.status)
+    : false;
+  const canSend = canEdit && selectedQuotation
+    ? ['APPROVED', 'READY_FOR_CUSTOMER'].includes(selectedQuotation.status)
+    : false;
+  const canEditLines = canEdit && selectedQuotation
+    ? !['REJECTED', 'CONFIRMED', 'EXPIRED', 'CANCELLED'].includes(selectedQuotation.status)
+    : false;
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
@@ -157,14 +185,16 @@ export default function QuotationsPage() {
               {quotations.length} total
             </div>
           </div>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowNewForm(!showNewForm)}
-            title="New quotation"
-          >
-            <Plus size={13} />
-            New
-          </button>
+          {canEdit && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowNewForm(!showNewForm)}
+              title="New quotation"
+            >
+              <Plus size={13} />
+              New
+            </button>
+          )}
         </div>
 
         {/* New quotation form */}
@@ -335,9 +365,16 @@ export default function QuotationsPage() {
                     {selectedQuotation.customer?.company || selectedQuotation.customer?.name || 'Customer'}
                   </div>
                 </div>
-                <button onClick={handleSubmit} className="btn btn-primary">
-                  Submit for Approval
-                </button>
+                {canSubmit && (
+                  <button onClick={handleSubmit} className="btn btn-primary">
+                    Submit for Approval
+                  </button>
+                )}
+                {canSend && (
+                  <button onClick={handleSend} className="btn btn-primary">
+                    Send to Customer
+                  </button>
+                )}
               </div>
             )}
 
@@ -454,6 +491,7 @@ export default function QuotationsPage() {
             </div>
 
             {/* Add line form */}
+            {canEditLines && (
             <div className="df-card">
               <div className="df-card-header">
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Add Line Item</span>
@@ -508,6 +546,7 @@ export default function QuotationsPage() {
                 </form>
               </div>
             </div>
+            )}
           </div>
         )}
       </div>

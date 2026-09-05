@@ -315,8 +315,8 @@ const getQuotationPipeline = asyncHandler(async (req, res) => {
 const createDraftQuotation = asyncHandler(async (req, res) => {
     const {customerId, currencyCode = 'USD'} = req.body;
 
-    if (req.user.role !== USER_ROLES.SALES_REP) {
-        throw new ApiError(403, 'Only sales reps can create draft quotations');
+    if (![USER_ROLES.SALES_REP, USER_ROLES.ADMIN].includes(req.user.role)) {
+        throw new ApiError(403, 'Only sales reps or admins can create draft quotations');
     }
 
     validateObjectId(customerId, 'customer id');

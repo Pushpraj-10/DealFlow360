@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, BadgePercent } from 'lucide-react';
 
 type Tier = { _id: string; name: string };
@@ -10,6 +11,8 @@ type PriceListItem = { _id: string; productId: string; unitPrice: number; basePr
 type PriceList = { _id: string; name: string; customerTierId: { _id: string; name: string } | string; currencyCode: string; items: PriceListItem[] };
 
 export default function PriceListsPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,10 +65,12 @@ export default function PriceListsPage() {
           <h1 className="df-page-title">Price Lists</h1>
           <p className="df-page-subtitle">Tier-specific pricing for products in quotations</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Price List
-        </button>
+        {canManage && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Price List
+          </button>
+        )}
       </div>
 
       {error && (
@@ -105,9 +110,11 @@ export default function PriceListsPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{pl.currencyCode}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pl.items.length}</td>
                   <td>
-                    <button onClick={() => setItemsFor(pl)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
-                      Add Item
-                    </button>
+                    {canManage && (
+                      <button onClick={() => setItemsFor(pl)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+                        Add Item
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

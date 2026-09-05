@@ -2,11 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
+import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, ListFilter } from 'lucide-react';
 
 type Category = { _id: string; name: string; maxAllowedDiscountPercent: number; isActive: boolean };
 
 export default function CategoriesPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SALES_MANAGER';
   const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -41,10 +44,12 @@ export default function CategoriesPage() {
           <h1 className="df-page-title">Product Categories</h1>
           <p className="df-page-subtitle">Category discount ceilings govern product-level discount rules</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={13} />
-          Add Category
-        </button>
+        {canManage && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={13} />
+            Add Category
+          </button>
+        )}
       </div>
 
       {error && (

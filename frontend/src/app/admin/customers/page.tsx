@@ -36,7 +36,9 @@ export default function CustomersPage() {
       .get<{ customers: Customer[] }>('/customers')
       .then((d) => setCustomers(d.customers))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'));
-    api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    if (canCreate) {
+      api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
+    }
   };
 
   useEffect(load, []);
