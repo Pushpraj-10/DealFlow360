@@ -7,7 +7,6 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle,
-  ChevronRight,
   Plus,
   Search,
   Sparkles,
@@ -30,6 +29,16 @@ import { TableSkeletonRows } from '@/components/ui/primitives';
 type Customer = { _id: string; name: string; company: string };
 type Product = { _id: string; name: string };
 type QuotationDoc = { _id: string };
+type QuotationVersion = {
+  _id: string;
+  versionNumber: number;
+  status?: string;
+  approvalStatus?: string;
+  riskSeverity?: string;
+  grandTotal?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
 type QuotationLine = {
   _id: string;
   productId: { name: string } | string;
@@ -58,6 +67,7 @@ type QuotationDetail = {
   riskSeverity?: string;
   approvalStatus?: string;
   marginPercentage?: number;
+  currentVersion?: number;
 };
 
 type UpsellRecommendation = {
@@ -68,32 +78,6 @@ type UpsellRecommendation = {
   expectedRevenue: number;
   estimatedMarginDelta: number;
   estimatedMarginPercent: number;
-};
-
-type OrderSnapshotSubscription = {
-  id: string;
-  status: string;
-  qty: number;
-  recurringUnitPriceCents: number;
-  nextBillDate: string;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  plan: { id: string; name: string; cycle: string } | null;
-};
-
-type OrderSnapshotLine = {
-  quotationLineId: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-  type: 'ONE_TIME' | 'RECURRING';
-  subscription: OrderSnapshotSubscription | null;
-};
-
-type OrderSnapshot = {
-  quotationId: string;
-  currency: string;
-  lines: OrderSnapshotLine[];
 };
 
 export default function QuotationsPage() {
@@ -110,6 +94,8 @@ export default function QuotationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lines, setLines] = useState<QuotationLine[]>([]);
   const [quotationDetail, setQuotationDetail] = useState<QuotationDetail | null>(null);
+  const [versions, setVersions] = useState<QuotationVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
   const [lineForm, setLineForm] = useState({ productId: '', quantity: '1', discountPercent: '0' });
   const [showNewForm, setShowNewForm] = useState(false);
   const [search, setSearch] = useState('');
@@ -120,12 +106,6 @@ export default function QuotationsPage() {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [dismissedRecommendationIds, setDismissedRecommendationIds] = useState<Set<string>>(new Set());
   const [acceptingRecommendationId, setAcceptingRecommendationId] = useState<string | null>(null);
-  const [orderSnapshot, setOrderSnapshot] = useState<OrderSnapshot | null>(null);
-  const [orderSnapshotLoading, setOrderSnapshotLoading] = useState(false);
-  const [modifyTarget, setModifyTarget] = useState<OrderSnapshotSubscription | null>(null);
-  const [modifyQty, setModifyQty] = useState(1);
-  const [modifyProrationPreview, setModifyProrationPreview] = useState<number | null>(null);
-  const [subscriptionActionId, setSubscriptionActionId] = useState<string | null>(null);
 
   const loadQuotations = () => {
     api
@@ -141,16 +121,25 @@ export default function QuotationsPage() {
       api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
     }
     api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
-  }, []);
+  }, [canEdit]);
 
   const loadLines = (id: string) => {
     api
-      .get<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${id}`)
+      .get<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${id}`)
       .then((d) => {
         setLines(d.lines);
         setQuotationDetail(d.quotation || null);
       })
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load quotation lines'));
+  };
+
+  const loadVersions = (id: string) => {
+    setVersionsLoading(true);
+    api
+      .get<{ versions: QuotationVersion[] }>(`/quotations/${id}/versions`)
+      .then((d) => setVersions(d.versions || []))
+      .catch(() => setVersions([]))
+      .finally(() => setVersionsLoading(false));
   };
 
   const loadRecommendations = (id: string) => {
@@ -172,8 +161,10 @@ export default function QuotationsPage() {
       setSelectedId(quoteId);
       setLines([]);
       setQuotationDetail(null);
+      setVersions([]);
       setDismissedRecommendationIds(new Set());
       loadLines(quoteId);
+      loadVersions(quoteId);
       loadRecommendations(quoteId);
     });
   }, [selectedId]);
@@ -189,6 +180,9 @@ export default function QuotationsPage() {
       setSelectedId(data.quotation._id);
       setLines([]);
       setQuotationDetail(null);
+      setVersions([]);
+      loadLines(data.quotation._id);
+      loadVersions(data.quotation._id);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create quotation');
     }
@@ -199,7 +193,7 @@ export default function QuotationsPage() {
     if (!selectedId) return;
     setError(null);
     try {
-      const data = await api.post<{ lines: QuotationLine[]; quotation: any }>(`/quotations/${selectedId}/lines`, {
+      const data = await api.post<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${selectedId}/lines`, {
         productId: lineForm.productId,
         quantity: Number(lineForm.quantity),
         discountPercent: Number(lineForm.discountPercent),
@@ -207,6 +201,7 @@ export default function QuotationsPage() {
       setLines(data.lines);
       setQuotationDetail(data.quotation || null);
       loadQuotations();
+      loadVersions(selectedId);
       loadRecommendations(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add line');
@@ -220,7 +215,7 @@ export default function QuotationsPage() {
     setAcceptingRecommendationId(recommendation.product.id);
     try {
       const data = await api.post<{
-        quotation: any;
+        quotation: QuotationDetail;
         lines: QuotationLine[];
         marginImpact: { estimatedMarginDelta: number; newMarginPercentage: number };
       }>(`/recommendations/quotations/${selectedId}/upsells`, { productId: recommendation.product.id });
@@ -230,6 +225,7 @@ export default function QuotationsPage() {
         `Added ${recommendation.product.name} to the quote - margin ${data.marginImpact.estimatedMarginDelta >= 0 ? '+' : ''}${money(data.marginImpact.estimatedMarginDelta, recommendationsCurrency)}, quote margin now ${data.marginImpact.newMarginPercentage?.toFixed(1)}%.`
       );
       loadQuotations();
+      loadVersions(selectedId);
       loadRecommendations(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add recommendation to quote');
@@ -257,6 +253,7 @@ export default function QuotationsPage() {
       );
       loadQuotations();
       loadLines(selectedId);
+      loadVersions(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to submit quotation');
     }
@@ -271,6 +268,7 @@ export default function QuotationsPage() {
       setInfo('Sent to customer - they can now review and confirm it from their portal.');
       loadQuotations();
       loadLines(selectedId);
+      loadVersions(selectedId);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to send quotation to customer');
     }
@@ -292,93 +290,18 @@ export default function QuotationsPage() {
   const statuses = Array.from(new Set(quotations.map((quotation) => quotation.status))).filter(Boolean);
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
 
-  // PRD B7: confirmed orders show one-time and recurring lines together with
-  // a billing schedule, so fetch the order snapshot once a quote is confirmed.
-  useEffect(() => {
-    if (!selectedId || selectedQuotation?.status !== 'CONFIRMED') {
-      setOrderSnapshot(null);
-      return;
-    }
-    setOrderSnapshotLoading(true);
-    api
-      .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
-      .then((d) => setOrderSnapshot(d.snapshot))
-      .catch(() => setOrderSnapshot(null))
-      .finally(() => setOrderSnapshotLoading(false));
-  }, [selectedId, selectedQuotation?.status]);
-
-  const cancelOrderSubscription = async (subscriptionId: string) => {
-    setError(null);
-    setInfo(null);
-    setSubscriptionActionId(subscriptionId);
-    try {
-      await api.post(`/subscriptions/${subscriptionId}/cancel`, { reason: 'Cancelled from order view' });
-      setInfo('Subscription cancelled. A prorated credit note is issued automatically if applicable.');
-      if (selectedId) {
-        api
-          .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
-          .then((d) => setOrderSnapshot(d.snapshot))
-          .catch(() => {});
-      }
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to cancel subscription');
-    } finally {
-      setSubscriptionActionId(null);
-    }
-  };
-
-  const openModify = (subscription: OrderSnapshotSubscription) => {
-    setModifyTarget(subscription);
-    setModifyQty(subscription.qty);
-    setModifyProrationPreview(null);
-  };
-
-  useEffect(() => {
-    if (!modifyTarget) return;
-    api
-      .get<{ proratedDeltaCents: number }>(`/billing/prorate?subscriptionId=${modifyTarget.id}&newQty=${modifyQty}`)
-      .then((d) => setModifyProrationPreview(d.proratedDeltaCents))
-      .catch(() => setModifyProrationPreview(null));
-  }, [modifyTarget, modifyQty]);
-
-  const confirmModifySubscription = async () => {
-    if (!modifyTarget) return;
-    setSubscriptionActionId(modifyTarget.id);
-    try {
-      await api.post(`/subscriptions/${modifyTarget.id}/modify`, { newQty: modifyQty });
-      setModifyTarget(null);
-      setInfo('Subscription modified. A prorated credit note is issued automatically if applicable.');
-      if (selectedId) {
-        api
-          .get<{ snapshot: OrderSnapshot }>(`/quotations/${selectedId}/order-snapshot`)
-          .then((d) => setOrderSnapshot(d.snapshot))
-          .catch(() => {});
-      }
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to modify subscription');
-    } finally {
-      setSubscriptionActionId(null);
-    }
-  };
-
-  const oneTimeOrderLines = orderSnapshot?.lines.filter((line) => line.type === 'ONE_TIME') || [];
-  const recurringOrderLines = orderSnapshot?.lines.filter((line) => line.type === 'RECURRING') || [];
-  const productNameByLineId = new Map(
-    lines.map((line) => [line._id, typeof line.productId === 'object' ? line.productId.name : 'Product'])
-  );
-
   // Calculate summary from lines
   const subtotal = lines.reduce((s, l) => s + (l.lineSubtotal || l.quantity * l.unitPrice), 0);
   const totalDiscount = lines.reduce((s, l) => s + (l.discountAmount || 0), 0);
   const totalTax = lines.reduce((s, l) => s + (l.tax || 0), 0);
   const grandTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const hasViolations = lines.some((l) => l.is_violation);
   const violationLines = lines.filter((l) => l.is_violation);
 
   // Use quotation detail for margin and risk if available
   const margin = quotationDetail?.marginPercentage;
   const riskSeverity = quotationDetail?.riskSeverity || selectedQuotation?.riskSeverity;
   const approvalStatus = quotationDetail?.approvalStatus || selectedQuotation?.approvalStatus;
+  const selectedVersion = quotationDetail?.currentVersion || selectedQuotation?.currentVersion;
 
   // Mirrors the backend's own state-transition guards (quotations.controller.js):
   // submit only from DRAFT/RETURNED_FOR_REVISION/REAPPROVAL_REQUIRED, send only
@@ -398,7 +321,7 @@ export default function QuotationsPage() {
   );
 
   return (
-    <div className="sales-page quotations-page">
+    <div className={`sales-page quotations-page${selectedId ? ' quotations-page--has-selection' : ''}`}>
       <div className="sales-page-heading quotations-page__header">
         <div>
           <p className="sales-eyebrow">Quotations</p>
@@ -427,26 +350,52 @@ export default function QuotationsPage() {
       )}
 
       {showNewForm && canEdit && (
-        <form onSubmit={handleCreate} className="sales-inline-form">
-          <label>
-            <span>Customer</span>
-            <select
-              value={newCustomerId}
-              onChange={(e) => setNewCustomerId(e.target.value)}
-              required
-              className="df-select"
-            >
-              <option value="">Choose customer...</option>
-              {customers.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.company || c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="btn btn-primary">Create Draft</button>
-          <button type="button" className="btn btn-ghost" onClick={() => setShowNewForm(false)}>Cancel</button>
-        </form>
+        <div className="sales-create-popover-layer" onClick={() => setShowNewForm(false)}>
+          <form
+            onSubmit={handleCreate}
+            className="sales-create-card sales-create-popover"
+            aria-label="Create draft quotation"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sales-create-card__header">
+              <div>
+                <p className="sales-eyebrow">New draft</p>
+                <h2>Create quotation</h2>
+                <span>Select the customer first. Products, pricing, discounts, and risk checks are added inside the builder.</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm sales-create-card__close"
+                onClick={() => setShowNewForm(false)}
+                aria-label="Close create quotation"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <label className="form-field">
+              <span className="form-label">Customer</span>
+              <select
+                value={newCustomerId}
+                onChange={(e) => setNewCustomerId(e.target.value)}
+                required
+                className="df-select"
+              >
+                <option value="">Choose customer...</option>
+                {customers.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.company || c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="sales-create-card__actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowNewForm(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Draft</button>
+            </div>
+          </form>
+        </div>
       )}
 
       <section className="sales-table-section">
@@ -468,6 +417,7 @@ export default function QuotationsPage() {
             <thead>
               <tr>
                 <th>Quote</th>
+                <th>Version</th>
                 <th>Customer</th>
                 <th className="num">Amount</th>
                 <th>Status</th>
@@ -477,7 +427,7 @@ export default function QuotationsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && <TableSkeletonRows columns={7} />}
+              {loading && <TableSkeletonRows columns={8} />}
               {!loading && filteredQuotations.map((quotation) => (
                 <tr
                   key={quotation.id}
@@ -495,6 +445,9 @@ export default function QuotationsPage() {
                   <td>
                     <span className="sales-quote-id">{quotation.quoteNumber}</span>
                   </td>
+                  <td>
+                    <span className="version-pill">v{quotation.currentVersion || 1}</span>
+                  </td>
                   <td>{getCustomerName(quotation.customer)}</td>
                   <td className="num">{money(quotation.total)}</td>
                   <td><span className={`status-badge ${getStatusClass(quotation.status)}`}>{formatStatus(quotation.status)}</span></td>
@@ -510,7 +463,7 @@ export default function QuotationsPage() {
               ))}
               {!loading && filteredQuotations.length === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className="sales-empty-line">No quotations match the current filters.</div>
                   </td>
                 </tr>
@@ -520,14 +473,24 @@ export default function QuotationsPage() {
         </div>
       </section>
 
-      <section className="quotation-builder-section">
-        {!selectedId ? (
-          <div className="sales-empty-state">
-            <ChevronRight size={30} />
-            <strong>Select a quotation</strong>
-            <span>Choose a quote from the table or create a new draft.</span>
-          </div>
-        ) : (
+      {selectedId && (
+      <div
+        className="quotation-builder-popover-layer"
+        onClick={() => {
+          setSelectedId(null);
+          setLines([]);
+          setQuotationDetail(null);
+          setVersions([]);
+          setInfo(null);
+        }}
+      >
+      <section
+        className="quotation-builder-section quotation-builder-popover"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Quotation builder"
+        onClick={(event) => event.stopPropagation()}
+      >
           <div className="quotation-builder-layout">
             {/* Main Content - 70% */}
             <div className="quotation-main-content">
@@ -539,12 +502,67 @@ export default function QuotationsPage() {
                     <h2 className="quotation-customer">{getCustomerName(selectedQuotation.customer)}</h2>
                   </div>
                   <div className="quotation-detail-meta">
+                    <span className="version-pill version-pill--strong">
+                      Version {selectedVersion || 1}
+                    </span>
                     <span className={`status-badge ${getStatusClass(selectedQuotation.status)}`}>
                       {formatStatus(selectedQuotation.status)}
                     </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setSelectedId(null);
+                        setLines([]);
+                        setQuotationDetail(null);
+                        setVersions([]);
+                        setInfo(null);
+                      }}
+                    >
+                      Back to list
+                    </button>
                   </div>
                 </div>
               )}
+
+              <div className="quotation-version-panel">
+                <div className="quotation-version-panel__header">
+                  <div>
+                    <h3 className="quotation-section-title">Version history</h3>
+                    <p>Material customer changes create a new quotation version and keep older submitted terms viewable.</p>
+                  </div>
+                </div>
+                {versionsLoading ? (
+                  <div className="skeleton" style={{ height: 52 }} />
+                ) : versions.length === 0 ? (
+                  <div className="quotation-empty-lines">
+                    <p>No submitted versions yet. Draft changes will appear here after submission or negotiation updates.</p>
+                  </div>
+                ) : (
+                  <div className="quotation-version-list">
+                    {versions.map((version) => (
+                      <div
+                        key={version._id}
+                        className={`quotation-version-item${version.versionNumber === selectedVersion ? ' is-current' : ''}`}
+                      >
+                        <div>
+                          <strong>Version {version.versionNumber}</strong>
+                          <span>{timeAgo(version.updatedAt || version.createdAt)}</span>
+                        </div>
+                        <span className={`status-badge ${getStatusClass(version.status)}`}>
+                          {formatStatus(version.status)}
+                        </span>
+                        <span>{formatStatus(version.approvalStatus || 'Not required')}</span>
+                        <span className="sales-risk-inline">
+                          <span className={`risk-dot ${getRiskClass(version.riskSeverity)}`} />
+                          {version.riskSeverity || 'None'}
+                        </span>
+                        <strong className="text-num">{money(version.grandTotal)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Product Lines */}
               <div className="quotation-lines-section">
@@ -598,92 +616,6 @@ export default function QuotationsPage() {
                   </div>
                 )}
               </div>
-
-              {/* Order & Billing (PRD B7): one-time and recurring lines shown
-                  together for a confirmed order, with billing schedule and
-                  cancel/modify controls for recurring lines. */}
-              {selectedQuotation?.status === 'CONFIRMED' && (
-                <div className="quotation-billing-section">
-                  <h3 className="quotation-section-title">Order &amp; billing</h3>
-
-                  {orderSnapshotLoading ? (
-                    <div className="skeleton" style={{ height: 80 }} />
-                  ) : !orderSnapshot ? (
-                    <div className="quotation-empty-lines">
-                      <p>Order and billing details were not returned for this order.</p>
-                    </div>
-                  ) : (
-                    <div className="quotation-billing-groups">
-                      <div className="quotation-billing-group">
-                        <h4>One-time</h4>
-                        {oneTimeOrderLines.length === 0 ? (
-                          <p className="sales-empty-line">No one-time lines on this order.</p>
-                        ) : (
-                          <ul className="quotation-billing-list">
-                            {oneTimeOrderLines.map((line) => (
-                              <li key={line.quotationLineId}>
-                                <span>{productNameByLineId.get(line.quotationLineId) || 'Product'}</span>
-                                <span>{line.quantity} x {money(line.unitPrice)}</span>
-                                <strong>{money(line.lineTotal)}</strong>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-
-                      <div className="quotation-billing-group">
-                        <h4>Recurring</h4>
-                        {recurringOrderLines.length === 0 ? (
-                          <p className="sales-empty-line">No recurring lines on this order.</p>
-                        ) : (
-                          <ul className="quotation-billing-list quotation-billing-list-recurring">
-                            {recurringOrderLines.map((line) => (
-                              <li key={line.quotationLineId}>
-                                <div className="quotation-billing-recurring-main">
-                                  <span>{productNameByLineId.get(line.quotationLineId) || 'Product'}</span>
-                                  <span>{line.quantity} x {money(line.unitPrice)}</span>
-                                  <strong>{money(line.lineTotal)}</strong>
-                                </div>
-                                {line.subscription && (
-                                  <div className="quotation-billing-schedule">
-                                    <span className={`status-badge ${line.subscription.status === 'ACTIVE' ? 'status-active' : 'status-draft'}`}>
-                                      {line.subscription.status}
-                                    </span>
-                                    <span>{line.subscription.plan?.name || 'Plan'} ({line.subscription.plan?.cycle || 'cycle'})</span>
-                                    {line.subscription.status === 'ACTIVE' && (
-                                      <span>Next bill {new Date(line.subscription.nextBillDate).toLocaleDateString()}</span>
-                                    )}
-                                    {line.subscription.status === 'ACTIVE' && (
-                                      <div className="quotation-billing-actions">
-                                        <button
-                                          type="button"
-                                          className="btn btn-ghost btn-sm"
-                                          disabled={subscriptionActionId === line.subscription.id}
-                                          onClick={() => openModify(line.subscription!)}
-                                        >
-                                          Modify
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger btn-sm"
-                                          disabled={subscriptionActionId === line.subscription.id}
-                                          onClick={() => cancelOrderSubscription(line.subscription!.id)}
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Add Line Form */}
               {canEditLines && (
@@ -852,7 +784,6 @@ export default function QuotationsPage() {
                       <div className="summary-risk-details">
                         {violationLines.map((line) => {
                           const productName = typeof line.productId === 'object' ? line.productId.name : 'Product';
-                          const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
                           const excessDiscount = line.excess_discount ?? 0;
                           return (
                             <div key={line._id} className="risk-item">
@@ -894,46 +825,10 @@ export default function QuotationsPage() {
               </div>
             </div>
           </div>
-        )}
       </section>
-
-      {modifyTarget && (
-        <div className="df-modal-overlay" onClick={() => setModifyTarget(null)}>
-          <div className="df-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="df-modal-header ops-modal-header">
-              <div>
-                <h2 className="df-modal-title">Modify subscription</h2>
-                <p>{modifyTarget.plan?.name || 'Plan'}</p>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setModifyTarget(null)}>
-                <X size={14} />
-              </button>
-            </div>
-            <div className="df-modal-body">
-              <div className="df-field">
-                <label className="df-label">New quantity</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={modifyQty}
-                  onChange={(e) => setModifyQty(parseInt(e.target.value, 10) || 1)}
-                  className="df-input"
-                />
-              </div>
-              <div className="ops-proration-box">
-                <span>Prorated {(modifyProrationPreview ?? 0) >= 0 ? 'charge' : 'credit'}</span>
-                <strong>{modifyProrationPreview !== null ? money(Math.abs(modifyProrationPreview) / 100) : 'Not returned'}</strong>
-              </div>
-            </div>
-            <div className="df-modal-footer">
-              <button onClick={() => setModifyTarget(null)} className="btn btn-ghost">Close</button>
-              <button onClick={confirmModifySubscription} className="btn btn-primary" disabled={subscriptionActionId === modifyTarget.id}>
-                Confirm changes
-              </button>
-            </div>
-          </div>
-        </div>
+      </div>
       )}
+
     </div>
   );
 }
