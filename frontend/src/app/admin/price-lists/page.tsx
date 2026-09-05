@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, BadgePercent } from 'lucide-react';
@@ -23,15 +23,15 @@ export default function PriceListsPage() {
   const [itemsFor, setItemsFor] = useState<PriceList | null>(null);
   const [itemForm, setItemForm] = useState({ productId: '', unitPrice: '', basePriceOverride: '' });
 
-  const load = () => {
+  const load = useCallback(() => {
     api.get<{ priceLists: PriceList[] }>('/price-lists').then((d) => setPriceLists(d.priceLists)).catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load price lists')).finally(() => setLoading(false));
     if (canManage) {
       api.get<{ tiers: Tier[] }>('/customer-tiers').then((d) => setTiers(d.tiers)).catch(() => {});
     }
     api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
-  };
+  }, [canManage]);
 
-  useEffect(load, []);
+  useEffect(load, [load]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

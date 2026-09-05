@@ -21,8 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUser(getStoredUser());
-    setLoading(false);
+    queueMicrotask(() => {
+      setUser(getStoredUser());
+      setLoading(false);
+    });
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

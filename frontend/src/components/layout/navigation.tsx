@@ -78,51 +78,20 @@ const ITEM = {
  */
 const NAV_BY_ROLE: Record<string, NavGroup[]> = {
   SALES_REP: [
-    { label: 'Workspace', items: [ITEM.overview, ITEM.pipeline, ITEM.quotations, ITEM.negotiations] },
-    { label: 'Accounts', items: [ITEM.customers] },
-    { label: 'Fulfillment', items: [ITEM.fulfillment, ITEM.backorders] },
+    { label: 'Workspace', items: [ITEM.overview, ITEM.pipeline, ITEM.quotations, ITEM.customers, ITEM.negotiations] },
   ],
   SALES_MANAGER: [
-    { label: 'Workspace', items: [ITEM.overview, ITEM.approvals, ITEM.teamDeals] },
-    { label: 'Insights', items: [ITEM.dealHealth, ITEM.reports] },
-    {
-      label: 'Governance',
-      items: [
-        ITEM.customerTiers,
-        ITEM.categories,
-        ITEM.pricing,
-        ITEM.discountRules,
-        ITEM.approvalRules,
-        ITEM.upsellRules,
-      ],
-    },
+    { label: 'Workspace', items: [ITEM.overview, ITEM.approvals, ITEM.teamDeals, ITEM.dealHealth] },
   ],
   FINANCE: [
-    { label: 'Workspace', items: [ITEM.overview, ITEM.approvals] },
-    { label: 'Operations', items: [ITEM.fulfillment, ITEM.backorders] },
-    { label: 'Finance', items: [ITEM.subscriptions, ITEM.invoices, ITEM.payments, ITEM.creditNotes] },
+    { label: 'Workspace', items: [ITEM.overview, ITEM.approvals, ITEM.fulfillment, ITEM.subscriptions, ITEM.invoices, ITEM.payments] },
   ],
   ADMIN: [
     { label: 'Overview', items: [ITEM.overview] },
-    { label: 'Workspace', items: [ITEM.quotations, ITEM.approvals] },
     { label: 'Sales', items: [ITEM.customers, ITEM.products, ITEM.pricing] },
-    {
-      label: 'Operations',
-      items: [ITEM.fulfillment, ITEM.backorders, ITEM.warehouses, ITEM.inventory, ITEM.subscriptionPlans],
-    },
-    { label: 'Finance', items: [ITEM.subscriptions, ITEM.invoices, ITEM.payments, ITEM.creditNotes] },
-    {
-      label: 'Governance',
-      items: [
-        ITEM.customerTiers,
-        ITEM.categories,
-        ITEM.discountRules,
-        ITEM.approvalRules,
-        ITEM.upsellRules,
-        ITEM.internalUsers,
-      ],
-    },
-    { label: 'Insights', items: [ITEM.reports, ITEM.dealHealth, ITEM.systemStatus] },
+    { label: 'Operations', items: [ITEM.warehouses, ITEM.inventory, ITEM.subscriptionPlans] },
+    { label: 'Governance', items: [ITEM.discountRules, ITEM.approvalRules] },
+    { label: 'Insights', items: [ITEM.reports, ITEM.dealHealth] },
   ],
 };
 

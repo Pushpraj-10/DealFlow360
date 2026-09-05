@@ -24,7 +24,7 @@ export function Reveal({
     if (!node) return;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setVisible(true);
+      queueMicrotask(() => setVisible(true));
       return;
     }
 

@@ -99,7 +99,7 @@ export default function UpsellRulesPage() {
         <div>
           <p className="admin-eyebrow">Governance</p>
           <h1>Upsell &amp; Cross-Sell Rules</h1>
-          <p>Define product pairings, promoted suggestions, and minimum margin thresholds for the quotation builder's recommendation panel.</p>
+          <p>Define product pairings, promoted suggestions, and minimum margin thresholds for the quotation builder&apos;s recommendation panel.</p>
         </div>
         {canManage && (
           <button onClick={() => setShowModal(true)} className="btn btn-primary">
