@@ -21,6 +21,7 @@ import {
   timeAgo,
   type QuotationListItem,
 } from '@/lib/salesRep';
+import { RecommendationsPanel } from '@/components/RecommendationsPanel';
 
 type Customer = { _id: string; name: string; company: string };
 type Product = { _id: string; name: string };
@@ -135,6 +136,14 @@ export default function QuotationsPage() {
       loadQuotations();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add line');
+    }
+  };
+
+  const handleRecommendationAdded = () => {
+    // Reload quotation data after recommendation is added
+    if (selectedId) {
+      loadLines(selectedId);
+      loadQuotations();
     }
   };
 
@@ -430,6 +439,14 @@ export default function QuotationsPage() {
                   </button>
                 </form>
               </div>
+
+              {/* Recommendations Panel */}
+              {selectedId && lines.length > 0 && (
+                <RecommendationsPanel 
+                  quotationId={selectedId}
+                  onRecommendationAdded={handleRecommendationAdded}
+                />
+              )}
             </div>
 
             {/* Commercial Summary - 30% Sticky */}
