@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
 import { api, ApiClientError } from '@/lib/api';
-import { ThemeToggle } from '@/components/ThemeToggle';
+
 import { ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const PROPOSED_ROLES = [
@@ -151,13 +151,9 @@ export default function LoginPage() {
           justifyContent: 'center',
           background: 'var(--bg)',
           padding: '48px 24px',
-          position: 'relative',
         }}
       >
-        <div style={{ position: 'absolute', top: 24, right: 24 }}>
-          <ThemeToggle />
-        </div>
-        
+
         <div style={{ width: '100%', maxWidth: 380 }}>
           <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: 'var(--surface-02)', borderRadius: 'var(--radius)', padding: 4 }}>
             {(['login', 'request'] as const).map((m) => (

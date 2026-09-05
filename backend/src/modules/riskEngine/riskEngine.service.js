@@ -1,4 +1,3 @@
-import {ApiError} from '../../core/utils/apiError.js';
 import {QuotationLine} from '../quotationLines/quotationLine.model.js';
 
 const getRiskThresholds = () => ({
@@ -51,9 +50,13 @@ const calculateBlendedRiskFromLines = (lines, thresholds = getRiskThresholds()) 
 
     const totalRevenueAfterDiscount = lines.reduce((total, line) => total + Number(line.revenueAfterDiscount || 0), 0);
 
-    if (totalRevenueAfterDiscount <= 0) {
-        throw new ApiError(400, 'Quotation revenue must be greater than 0 to calculate blended risk');
-    }
+    // Revenue-share weighting is undefined when the order nets to zero (every
+    // line fully comped, or priced at 0) - that isn't a reason to refuse to
+    // score it. A 100%-off line is itself the maximum possible policy
+    // violation, so fall back to weighting every line equally instead of
+    // dividing by zero, which keeps this scoreable rather than unsubmittable.
+    const useEqualWeights = totalRevenueAfterDiscount <= 0;
+    const equalWeight = 1 / lines.length;
 
     let totalRiskScore = 0;
     let totalExcessDiscountExposure = 0;
@@ -64,7 +67,7 @@ const calculateBlendedRiskFromLines = (lines, thresholds = getRiskThresholds()) 
         const allowedDiscount = Number(line.allowed_discount ?? line.allowedDiscountPercent ?? 0);
         const excessDiscount = Math.max(0, Number(line.excess_discount ?? actualDiscount - allowedDiscount));
         const revenueAfterDiscount = Number(line.revenueAfterDiscount || 0);
-        const revenueShare = revenueAfterDiscount / totalRevenueAfterDiscount;
+        const revenueShare = useEqualWeights ? equalWeight : (revenueAfterDiscount / totalRevenueAfterDiscount);
         const weightedContribution = Math.round((excessDiscount * revenueShare + Number.EPSILON) * 100) / 100;
         const exposureAmount = Math.round(((line.lineSubtotal || 0) * (excessDiscount / 100) + Number.EPSILON) * 100) / 100;
         const productName = line.productName || line.productId?.name || 'Unknown product';
