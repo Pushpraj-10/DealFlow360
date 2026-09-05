@@ -80,6 +80,15 @@ type UpsellRecommendation = {
   estimatedMarginPercent: number;
 };
 
+const QUOTATION_STATUS_FILTERS = [
+  { value: '', label: 'All quotes', statuses: [] },
+  { value: 'draft', label: 'Draft', statuses: ['DRAFT', 'RETURNED_FOR_REVISION', 'REAPPROVAL_REQUIRED'] },
+  { value: 'approval', label: 'Approval', statuses: ['PENDING_APPROVAL'] },
+  { value: 'customer', label: 'Customer / Negotiation', statuses: ['APPROVED', 'READY_FOR_CUSTOMER', 'SENT_TO_CUSTOMER', 'UNDER_NEGOTIATION'] },
+  { value: 'confirmed', label: 'Confirmed', statuses: ['CONFIRMED'] },
+  { value: 'closed', label: 'Closed', statuses: ['REJECTED', 'EXPIRED', 'CANCELLED'] },
+];
+
 export default function QuotationsPage() {
   const { user } = useAuth();
   // Mirrors the backend's requireRoles() guards on /quotations (quotations.routes.js):
@@ -274,10 +283,23 @@ export default function QuotationsPage() {
     }
   };
 
+  const openQuotation = (id: string) => {
+    setSelectedId(id);
+    setLines([]);
+    setQuotationDetail(null);
+    setVersions([]);
+    setDismissedRecommendationIds(new Set());
+    loadLines(id);
+    loadVersions(id);
+    loadRecommendations(id);
+    setInfo(null);
+  };
+
   const filteredQuotations = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const activeFilter = QUOTATION_STATUS_FILTERS.find((filter) => filter.value === statusFilter);
     return quotations.filter((quotation) => {
-      const matchesStatus = !statusFilter || quotation.status === statusFilter;
+      const matchesStatus = !activeFilter?.statuses.length || activeFilter.statuses.includes(quotation.status);
       const matchesSearch =
         !term ||
         [quotation.quoteNumber, getCustomerName(quotation.customer), quotation.status, quotation.riskSeverity, quotation.approvalStatus]
@@ -287,7 +309,6 @@ export default function QuotationsPage() {
     });
   }, [quotations, search, statusFilter]);
 
-  const statuses = Array.from(new Set(quotations.map((quotation) => quotation.status))).filter(Boolean);
   const selectedQuotation = quotations.find((q) => q.id === selectedId);
 
   // Calculate summary from lines
@@ -405,9 +426,8 @@ export default function QuotationsPage() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search quotes or customers" />
           </div>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="df-select">
-            <option value="">All statuses</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>{formatStatus(status)}</option>
+            {QUOTATION_STATUS_FILTERS.map((filter) => (
+              <option key={filter.value || 'all'} value={filter.value}>{filter.label}</option>
             ))}
           </select>
         </div>
@@ -432,15 +452,7 @@ export default function QuotationsPage() {
                 <tr
                   key={quotation.id}
                   className={selectedId === quotation.id ? 'selected' : ''}
-                  onClick={() => {
-                    setSelectedId(quotation.id);
-                    setLines([]);
-                    setQuotationDetail(null);
-                    setDismissedRecommendationIds(new Set());
-                    loadLines(quotation.id);
-                    loadRecommendations(quotation.id);
-                    setInfo(null);
-                  }}
+                  onClick={() => openQuotation(quotation.id)}
                 >
                   <td>
                     <span className="sales-quote-id">{quotation.quoteNumber}</span>
