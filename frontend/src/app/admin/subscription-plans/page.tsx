@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ApiClientError } from '@/lib/api';
 import { AlertCircle, Plus, RefreshCw } from 'lucide-react';
 
@@ -14,6 +15,7 @@ type Plan = {
 };
 
 export default function SubscriptionPlansPage() {
+  const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +91,11 @@ export default function SubscriptionPlansPage() {
             </thead>
             <tbody>
               {plans.map((p) => (
-                <tr key={p._id}>
+                <tr
+                  key={p._id}
+                  onClick={() => router.push(`/admin/subscription-plans/${p._id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td style={{ fontWeight: 500 }}>{p.name}</td>
                   <td style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{p.cycle}</td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.proration_policy?.replace(/_/g, ' ')}</td>

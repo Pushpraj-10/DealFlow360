@@ -551,6 +551,15 @@ h1, h2, h3, h4, h5, h6 {
   animation: fadeIn var(--transition-fast) ease;
 }
 
+/* The topbar is sticky and sits in front of the modal backdrop, so it needs
+   its own blur/dim whenever a modal is open anywhere on the page. */
+body:has(.df-modal-overlay) .app-topbar {
+  filter: blur(3px);
+  opacity: 0.6;
+  pointer-events: none;
+  transition: filter var(--transition-fast) ease, opacity var(--transition-fast) ease;
+}
+
 .df-modal {
   background: var(--surface-01);
   border-radius: var(--radius-md);
@@ -4792,8 +4801,8 @@ h3 { font-weight: 600; letter-spacing: -0.2px; }
 
 /* Smooth page entrance */
 @keyframes pageFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .app-main > * {

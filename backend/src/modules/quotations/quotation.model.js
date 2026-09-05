@@ -130,7 +130,16 @@ const quotationSchema = new Schema(
             min: 1
         }
     },
-    {timestamps: true}
+    // optimisticConcurrency: without it, Mongoose's __v check only guards
+    // array-subdocument mutations by default, not plain scalar field saves
+    // like the status transitions in quotationState.service.js - so two
+    // concurrent requests (e.g. a double-clicked customer "Confirm") could
+    // both load the same quotation, both .save() successfully, and both
+    // "win" a transition that should only ever happen once. This makes
+    // every .save() include the loaded __v in its update filter, so the
+    // loser's save throws a VersionError (translated to a clean 409 by the
+    // error middleware) instead of silently applying a stale change.
+    {timestamps: true, optimisticConcurrency: true}
 );
 
 export const Quotation = mongoose.model('Quotation', quotationSchema);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import {
@@ -43,6 +44,7 @@ function tierDiscount(customer: Customer) {
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const canCreate = user?.role === 'ADMIN';
   const isSalesRep = user?.role === 'SALES_REP';
@@ -162,7 +164,11 @@ export default function CustomersPage() {
               </thead>
               <tbody>
                 {customers.map((c) => (
-                  <tr key={c._id}>
+                  <tr
+                    key={c._id}
+                    onClick={() => router.push(`/admin/customers/${c._id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td>{c.company}</td>
                     <td>

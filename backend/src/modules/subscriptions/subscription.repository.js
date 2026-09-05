@@ -13,14 +13,20 @@ const findSubscriptions = (filter = {}) => Subscription.find(filter).populate('p
 const findSubscriptionsByQuoteLineIds = (quoteLineIds) =>
     Subscription.find({ originating_quote_line_id: { $in: quoteLineIds } }).populate('plan_id');
 
-const findSubscriptionById = (id) => Subscription.findById(id).populate('plan_id');
+const findSubscriptionById = (id, session) => {
+    const query = Subscription.findById(id).populate('plan_id');
+    return session ? query.session(session) : query;
+};
 
 const createSubscription = (data) => Subscription.create(data);
 
-const updateSubscription = (id, data) =>
-    Subscription.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+const updateSubscription = (id, data, session) =>
+    Subscription.findByIdAndUpdate(id, data, { new: true, runValidators: true, session });
 
-const createSubscriptionChange = (data) => SubscriptionChange.create(data);
+const createSubscriptionChange = async (data, session) => {
+    const [change] = await SubscriptionChange.create([data], { session });
+    return change;
+};
 
 const findChangesBySubscriptionId = (subscriptionId) =>
     SubscriptionChange.find({ subscription_id: subscriptionId }).sort({ created_at: -1 });

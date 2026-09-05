@@ -9,7 +9,10 @@ import { Quotation } from '../quotations/quotation.model.js';
 
 const findInvoices = (filter = {}) => Invoice.find(filter).sort({ created_at: -1 });
 
-const findInvoiceById = (id) => Invoice.findById(id);
+const findInvoiceById = (id, session) => {
+    const query = Invoice.findById(id);
+    return session ? query.session(session) : query;
+};
 
 const findLinesByInvoiceId = (invoiceId) => InvoiceLine.find({ invoice_id: invoiceId });
 
@@ -31,13 +34,26 @@ const createInvoiceWithLine = async (invoiceData, lineData) => {
     return { invoice, line };
 };
 
-const createPayment = (data) => Payment.create(data);
+const createPayment = async (data, session) => {
+    const [payment] = await Payment.create([data], { session });
+    return payment;
+};
 
-const createCreditNote = (data) => CreditNote.create(data);
+const createCreditNote = async (data, session) => {
+    const [creditNote] = await CreditNote.create([data], { session });
+    return creditNote;
+};
 
 const findCreditNotes = (filter = {}) => CreditNote.find(filter).sort({ created_at: -1 });
 
-const updateInvoice = (id, data) => Invoice.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+const updateInvoice = (id, data, session) =>
+    Invoice.findByIdAndUpdate(id, data, { new: true, runValidators: true, session });
+
+// Atomic $inc avoids the lost-update race of a read-modify-write on
+// paid_amount_cents/total_cents when two payments or credit notes for the
+// same invoice are submitted concurrently.
+const incrementInvoiceAmounts = (id, delta, session) =>
+    Invoice.findByIdAndUpdate(id, { $inc: delta }, { new: true, session });
 
 const findAllocationById = (id) => FulfillmentAllocation.findById(id).populate({
     path: 'quote_line_id',
@@ -61,6 +77,7 @@ export {
     createCreditNote,
     findCreditNotes,
     updateInvoice,
+    incrementInvoiceAmounts,
     findAllocationById,
     findSubscriptionById,
     findFulfillmentById,

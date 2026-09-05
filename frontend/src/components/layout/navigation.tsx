@@ -90,7 +90,7 @@ const NAV_BY_ROLE: Record<string, NavGroup[]> = {
     { label: 'Overview', items: [ITEM.overview] },
     { label: 'Sales', items: [ITEM.customers, ITEM.products, ITEM.pricing] },
     { label: 'Operations', items: [ITEM.warehouses, ITEM.inventory, ITEM.subscriptionPlans] },
-    { label: 'Governance', items: [ITEM.discountRules, ITEM.approvalRules] },
+    { label: 'Governance', items: [ITEM.discountRules, ITEM.approvalRules, ITEM.internalUsers] },
     { label: 'Insights', items: [ITEM.reports, ITEM.dealHealth] },
   ],
 };

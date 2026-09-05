@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import { AlertCircle, Plus, Package, X } from 'lucide-react';
@@ -41,6 +42,7 @@ function BillingBadge({ type }: { type: string }) {
 }
 
 export default function ProductsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN';
   const [products, setProducts] = useState<Product[]>([]);
@@ -154,7 +156,11 @@ export default function ProductsPage() {
             </thead>
             <tbody>
               {products.map((p) => (
-                <tr key={p._id}>
+                <tr
+                  key={p._id}
+                  onClick={() => router.push(`/admin/products/${p._id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>
                     <strong>{p.name}</strong>
                     <small>{p.isStockManaged ? 'Stock-managed' : 'Non-stock item'}</small>
@@ -186,7 +192,10 @@ export default function ProductsPage() {
                   </td>
                   <td>
                     <button
-                      onClick={() => openVariants(p)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openVariants(p);
+                      }}
                       className="btn btn-ghost btn-sm"
                       style={{ fontSize: 12, color: 'var(--accent)' }}
                     >

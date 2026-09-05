@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { ApiError } from '../../core/utils/apiError.js';
 import { ErrorCodes } from '../../core/utils/errorCodes.js';
 import { computeProratedDeltaCents } from '../../core/utils/money.js';
@@ -139,72 +140,120 @@ const modifySubscription = async (subscriptionId, { newQty, newUnitPriceCents, n
     if (newQty === undefined && newUnitPriceCents === undefined && newPlanId === undefined) {
         throw new ApiError(400, 'Nothing to change', [], '', ErrorCodes.VALIDATION_ERROR);
     }
-
-    const subscription = await getSubscriptionOrThrow(subscriptionId);
-    if (subscription.status !== 'ACTIVE') {
-        throw new ApiError(409, 'Only an active subscription can be modified', [], '', ErrorCodes.VALIDATION_ERROR);
+    if (newQty !== undefined && (!Number.isInteger(Number(newQty)) || Number(newQty) < 1)) {
+        throw new ApiError(400, 'newQty must be a whole number of at least 1', [], '', ErrorCodes.VALIDATION_ERROR);
+    }
+    if (newUnitPriceCents !== undefined && (!Number.isFinite(Number(newUnitPriceCents)) || Number(newUnitPriceCents) < 0)) {
+        throw new ApiError(400, 'newUnitPriceCents must be a non-negative number', [], '', ErrorCodes.VALIDATION_ERROR);
     }
 
-    const { newQtyResolved, newUnitPriceCentsResolved, proratedDeltaCents } = calculateProration(subscription, {
-        newQty,
-        newUnitPriceCents,
-    });
+    // The subscription is re-fetched and re-validated *inside* the
+    // transaction (not once, up front) so that if two modify/cancel calls
+    // for the same subscription race, MongoDB's write conflict on the
+    // shared document forces the loser to retry against the winner's
+    // already-committed state - it then sees the real current status/qty
+    // instead of computing proration off stale numbers or double-applying
+    // a change that already happened.
+    const session = await mongoose.startSession();
+    let result;
+    try {
+        await session.withTransaction(async () => {
+            const subscription = await subscriptionRepository.findSubscriptionById(subscriptionId, session);
+            if (!subscription) {
+                throw new ApiError(404, 'Subscription not found', [], '', ErrorCodes.NOT_FOUND);
+            }
+            if (subscription.status !== 'ACTIVE') {
+                throw new ApiError(409, 'Only an active subscription can be modified', [], '', ErrorCodes.VALIDATION_ERROR);
+            }
 
-    let creditNote = null;
-    let invoice = null;
+            const { newQtyResolved, newUnitPriceCentsResolved, proratedDeltaCents } = calculateProration(subscription, {
+                newQty,
+                newUnitPriceCents,
+            });
 
-    if (proratedDeltaCents > 0) {
-        invoice = await Invoice.create({
-            invoice_no: `INV-SUB-${Date.now()}`,
-            customer_id: subscription.customer_id,
-            subscription_id: subscription._id,
-            status: 'UNPAID',
-            due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-            subtotal_cents: proratedDeltaCents,
-            tax_cents: 0,
-            total_cents: proratedDeltaCents,
+            let creditNote = null;
+            let invoice = null;
+
+            if (proratedDeltaCents > 0) {
+                [invoice] = await Invoice.create(
+                    [
+                        {
+                            invoice_no: `INV-SUB-${Date.now()}`,
+                            customer_id: subscription.customer_id,
+                            subscription_id: subscription._id,
+                            status: 'UNPAID',
+                            due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                            subtotal_cents: proratedDeltaCents,
+                            tax_cents: 0,
+                            total_cents: proratedDeltaCents,
+                        },
+                    ],
+                    { session }
+                );
+                await InvoiceLine.create(
+                    [
+                        {
+                            invoice_id: invoice._id,
+                            source_type: 'subscription',
+                            source_id: subscription._id,
+                            description: 'Mid-cycle subscription upgrade proration',
+                            qty: 1,
+                            unit_price_cents: proratedDeltaCents,
+                            amount_cents: proratedDeltaCents,
+                        },
+                    ],
+                    { session }
+                );
+            } else if (proratedDeltaCents < 0) {
+                [creditNote] = await CreditNote.create(
+                    [
+                        {
+                            customer_id: subscription.customer_id,
+                            amount_cents: Math.abs(proratedDeltaCents),
+                            reason: reason || 'Mid-cycle subscription downgrade proration',
+                            status: 'ISSUED',
+                        },
+                    ],
+                    { session }
+                );
+            }
+
+            const change = await subscriptionRepository.createSubscriptionChange(
+                {
+                    subscription_id: subscription._id,
+                    old_qty: subscription.qty,
+                    new_qty: newQtyResolved,
+                    old_plan_id: subscription.plan_id?._id || subscription.plan_id,
+                    new_plan_id: newPlanId || subscription.plan_id?._id || subscription.plan_id,
+                    old_unit_price_cents: subscription.recurring_unit_price_cents,
+                    new_unit_price_cents: newUnitPriceCentsResolved,
+                    prorated_delta_cents: proratedDeltaCents,
+                    credit_note_id: creditNote?._id || null,
+                    reason: reason || '',
+                },
+                session
+            );
+
+            if (creditNote) {
+                creditNote.subscription_change_id = change._id;
+                await creditNote.save({ session });
+            }
+
+            const updated = await subscriptionRepository.updateSubscription(
+                subscriptionId,
+                {
+                    qty: newQtyResolved,
+                    recurring_unit_price_cents: newUnitPriceCentsResolved,
+                    ...(newPlanId ? { plan_id: newPlanId } : {}),
+                },
+                session
+            );
+
+            result = { subscription: updated, change, invoice, creditNote, proratedDeltaCents };
         });
-        await InvoiceLine.create({
-            invoice_id: invoice._id,
-            source_type: 'subscription',
-            source_id: subscription._id,
-            description: 'Mid-cycle subscription upgrade proration',
-            qty: 1,
-            unit_price_cents: proratedDeltaCents,
-            amount_cents: proratedDeltaCents,
-        });
-    } else if (proratedDeltaCents < 0) {
-        creditNote = await CreditNote.create({
-            customer_id: subscription.customer_id,
-            amount_cents: Math.abs(proratedDeltaCents),
-            reason: reason || 'Mid-cycle subscription downgrade proration',
-            status: 'ISSUED',
-        });
+    } finally {
+        await session.endSession();
     }
-
-    const change = await subscriptionRepository.createSubscriptionChange({
-        subscription_id: subscription._id,
-        old_qty: subscription.qty,
-        new_qty: newQtyResolved,
-        old_plan_id: subscription.plan_id?._id || subscription.plan_id,
-        new_plan_id: newPlanId || subscription.plan_id?._id || subscription.plan_id,
-        old_unit_price_cents: subscription.recurring_unit_price_cents,
-        new_unit_price_cents: newUnitPriceCentsResolved,
-        prorated_delta_cents: proratedDeltaCents,
-        credit_note_id: creditNote?._id || null,
-        reason: reason || '',
-    });
-
-    if (creditNote) {
-        creditNote.subscription_change_id = change._id;
-        await creditNote.save();
-    }
-
-    const updated = await subscriptionRepository.updateSubscription(subscriptionId, {
-        qty: newQtyResolved,
-        recurring_unit_price_cents: newUnitPriceCentsResolved,
-        ...(newPlanId ? { plan_id: newPlanId } : {}),
-    });
 
     await logAction({
         actorId,
@@ -212,98 +261,127 @@ const modifySubscription = async (subscriptionId, { newQty, newUnitPriceCents, n
         entityType: 'Subscription',
         entityId: subscriptionId,
         reason,
-        metadata: { proratedDeltaCents, changeId: change._id },
+        metadata: { proratedDeltaCents: result.proratedDeltaCents, changeId: result.change._id },
     });
 
-    if (creditNote) {
+    if (result.creditNote) {
         await logAction({
             actorId,
             action: 'CREDIT_NOTE_CREATED',
             entityType: 'CreditNote',
-            entityId: creditNote._id,
+            entityId: result.creditNote._id,
             reason,
         });
     }
 
-    return { subscription: updated, change, invoice, creditNote };
+    return result;
 };
 
 const cancelSubscription = async (subscriptionId, { reason }, actorId) => {
-    const subscription = await getSubscriptionOrThrow(subscriptionId);
-    if (subscription.status === 'CANCELLED') {
-        throw new ApiError(409, 'Subscription is already cancelled', [], '', ErrorCodes.VALIDATION_ERROR);
-    }
+    // Same TOCTOU concern as modifySubscription: fetch, status check, and
+    // proration are all done fresh inside the transaction so two concurrent
+    // cancel calls for the same subscription can't both pass the "not
+    // already cancelled" check and each issue their own refund credit note
+    // for a single cancellation.
+    const session = await mongoose.startSession();
+    let result;
+    try {
+        await session.withTransaction(async () => {
+            const subscription = await subscriptionRepository.findSubscriptionById(subscriptionId, session);
+            if (!subscription) {
+                throw new ApiError(404, 'Subscription not found', [], '', ErrorCodes.NOT_FOUND);
+            }
+            if (subscription.status === 'CANCELLED') {
+                throw new ApiError(409, 'Subscription is already cancelled', [], '', ErrorCodes.VALIDATION_ERROR);
+            }
 
-    const plan = subscription.plan_id;
-    const policy = plan?.cancellation_policy || 'credit_remaining';
+            const plan = subscription.plan_id;
+            const policy = plan?.cancellation_policy || 'credit_remaining';
 
-    let creditNote = null;
-    let creditAmountCents = 0;
+            let creditAmountCents = 0;
+            if (policy === 'full_refund') {
+                creditAmountCents = subscription.recurring_unit_price_cents * subscription.qty;
+            } else if (policy === 'credit_remaining') {
+                const delta = computeProratedDeltaCents({
+                    oldUnitPriceCents: subscription.recurring_unit_price_cents,
+                    oldQty: subscription.qty,
+                    newUnitPriceCents: 0,
+                    newQty: 0,
+                    periodStart: subscription.current_period_start,
+                    periodEnd: subscription.current_period_end,
+                    effectiveAt: new Date(),
+                });
+                creditAmountCents = Math.abs(delta);
+            }
 
-    if (policy === 'full_refund') {
-        creditAmountCents = subscription.recurring_unit_price_cents * subscription.qty;
-    } else if (policy === 'credit_remaining') {
-        const delta = computeProratedDeltaCents({
-            oldUnitPriceCents: subscription.recurring_unit_price_cents,
-            oldQty: subscription.qty,
-            newUnitPriceCents: 0,
-            newQty: 0,
-            periodStart: subscription.current_period_start,
-            periodEnd: subscription.current_period_end,
-            effectiveAt: new Date(),
+            let creditNote = null;
+            if (creditAmountCents > 0) {
+                [creditNote] = await CreditNote.create(
+                    [
+                        {
+                            customer_id: subscription.customer_id,
+                            amount_cents: creditAmountCents,
+                            reason: reason || `Subscription cancelled (${policy})`,
+                            status: 'ISSUED',
+                        },
+                    ],
+                    { session }
+                );
+            }
+
+            const change = await subscriptionRepository.createSubscriptionChange(
+                {
+                    subscription_id: subscription._id,
+                    old_qty: subscription.qty,
+                    new_qty: 0,
+                    old_plan_id: subscription.plan_id?._id || subscription.plan_id,
+                    new_plan_id: subscription.plan_id?._id || subscription.plan_id,
+                    old_unit_price_cents: subscription.recurring_unit_price_cents,
+                    new_unit_price_cents: 0,
+                    prorated_delta_cents: -creditAmountCents,
+                    credit_note_id: creditNote?._id || null,
+                    reason: reason || `Cancellation (${policy})`,
+                },
+                session
+            );
+
+            if (creditNote) {
+                creditNote.subscription_change_id = change._id;
+                await creditNote.save({ session });
+            }
+
+            const updated = await subscriptionRepository.updateSubscription(
+                subscriptionId,
+                { status: 'CANCELLED' },
+                session
+            );
+
+            result = { subscription: updated, change, creditNote, policy, creditAmountCents };
         });
-        creditAmountCents = Math.abs(delta);
+    } finally {
+        await session.endSession();
     }
-
-    if (creditAmountCents > 0) {
-        creditNote = await CreditNote.create({
-            customer_id: subscription.customer_id,
-            amount_cents: creditAmountCents,
-            reason: reason || `Subscription cancelled (${policy})`,
-            status: 'ISSUED',
-        });
-    }
-
-    const change = await subscriptionRepository.createSubscriptionChange({
-        subscription_id: subscription._id,
-        old_qty: subscription.qty,
-        new_qty: 0,
-        old_plan_id: subscription.plan_id?._id || subscription.plan_id,
-        new_plan_id: subscription.plan_id?._id || subscription.plan_id,
-        old_unit_price_cents: subscription.recurring_unit_price_cents,
-        new_unit_price_cents: 0,
-        prorated_delta_cents: -creditAmountCents,
-        credit_note_id: creditNote?._id || null,
-        reason: reason || `Cancellation (${policy})`,
-    });
-
-    if (creditNote) {
-        creditNote.subscription_change_id = change._id;
-        await creditNote.save();
-    }
-
-    const updated = await subscriptionRepository.updateSubscription(subscriptionId, { status: 'CANCELLED' });
 
     await logAction({
         actorId,
         action: 'SUBSCRIPTION_MODIFIED',
         entityType: 'Subscription',
         entityId: subscriptionId,
-        reason: reason || `Cancelled per policy ${policy}`,
-        metadata: { cancelled: true, policy, creditAmountCents },
+        reason: reason || `Cancelled per policy ${result.policy}`,
+        metadata: { cancelled: true, policy: result.policy, creditAmountCents: result.creditAmountCents },
     });
 
-    if (creditNote) {
+    if (result.creditNote) {
         await logAction({
             actorId,
             action: 'CREDIT_NOTE_CREATED',
             entityType: 'CreditNote',
-            entityId: creditNote._id,
+            entityId: result.creditNote._id,
             reason,
         });
     }
 
-    return { subscription: updated, change, creditNote };
+    return result;
 };
 
 export {

@@ -4,6 +4,7 @@ import {asyncHandler} from '../../core/utils/asyncHandler.js';
 import {SIGNUP_REQUEST_STATUSES, USER_STATUSES} from '../../core/constants.js';
 import {User} from './user.model.js';
 import {UserSignupRequest} from './userSignupRequest.model.js';
+import {sendSignupApprovedEmail, sendSignupRejectedEmail} from '../_shared/mail/mail.service.js';
 
 const listUsers = asyncHandler(async (req, res) => {
     const users = await User.find().sort({createdAt: -1});
@@ -77,6 +78,10 @@ const approveSignupRequest = asyncHandler(async (req, res) => {
     request.createdUserId = user._id;
     await request.save();
 
+    // sendMail never throws - a notification failure should not undo an
+    // approval that already succeeded.
+    await sendSignupApprovedEmail({to: user.email, fullName: user.fullName, role: user.role});
+
     return res
     .status(201)
     .json(new ApiResponse(201, {user: user.toSafeObject(), request: request.toSafeObject()}, 'Signup request approved'));
@@ -91,6 +96,8 @@ const rejectSignupRequest = asyncHandler(async (req, res) => {
     request.reviewedAt = new Date();
     request.reviewNote = reason || null;
     await request.save();
+
+    await sendSignupRejectedEmail({to: request.email, fullName: request.fullName, reason: request.reviewNote});
 
     return res
     .status(200)

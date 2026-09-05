@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { ApiError } from '../../core/utils/apiError.js';
 import { ErrorCodes } from '../../core/utils/errorCodes.js';
 import { logAction } from '../_shared/audit-log/audit-log.service.js';
@@ -170,50 +171,81 @@ const generateInvoice = async (body, actorId) => {
     throw new ApiError(400, "source_type must be 'shipment' or 'subscription'", [], '', ErrorCodes.VALIDATION_ERROR);
 };
 
+/**
+ * Two payments submitted for the same invoice at nearly the same instant
+ * both need to see each other's effect on the remaining balance, or the
+ * balance check ("does this payment exceed what's left?") is checked against
+ * stale data and both can pass. Wrapping the read, balance check, and write
+ * in one transaction with an atomic $inc (rather than read-then-set) makes
+ * MongoDB's write-conflict detection abort and retry the loser against the
+ * winner's already-committed paid_amount_cents, so it re-checks the real
+ * remaining balance instead of clobbering the winner's update.
+ */
 const recordPayment = async (invoiceId, { amount_cents, method, reference }, actorId) => {
     if (!amount_cents || amount_cents <= 0) {
         throw new ApiError(400, 'amount_cents must be positive', [], '', ErrorCodes.VALIDATION_ERROR);
     }
 
-    const invoice = await getInvoiceOrThrow(invoiceId);
-    if (!['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status)) {
-        throw new ApiError(409, 'Invoice is not open for payment', [], '', ErrorCodes.VALIDATION_ERROR);
+    const session = await mongoose.startSession();
+    let result;
+    try {
+        await session.withTransaction(async () => {
+            const invoice = await invoicingRepository.findInvoiceById(invoiceId, session);
+            if (!invoice) {
+                throw new ApiError(404, 'Invoice not found', [], '', ErrorCodes.NOT_FOUND);
+            }
+            if (!['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status)) {
+                throw new ApiError(409, 'Invoice is not open for payment', [], '', ErrorCodes.VALIDATION_ERROR);
+            }
+
+            const balanceCents = invoice.total_cents - invoice.paid_amount_cents;
+            if (amount_cents > balanceCents) {
+                throw new ApiError(
+                    400,
+                    `Payment of ${amount_cents} exceeds remaining balance of ${balanceCents}`,
+                    [],
+                    '',
+                    ErrorCodes.PAYMENT_EXCEEDS_BALANCE
+                );
+            }
+
+            const payment = await invoicingRepository.createPayment(
+                {
+                    invoice_id: invoiceId,
+                    amount_cents,
+                    method,
+                    reference,
+                    recorded_by: actorId,
+                },
+                session
+            );
+
+            const updatedInvoice = await invoicingRepository.incrementInvoiceAmounts(
+                invoiceId,
+                { paid_amount_cents: amount_cents },
+                session
+            );
+            const finalInvoice = await invoicingRepository.updateInvoice(
+                invoiceId,
+                { status: updatedInvoice.paid_amount_cents >= updatedInvoice.total_cents ? 'PAID' : 'PARTIALLY_PAID' },
+                session
+            );
+
+            result = { invoice: finalInvoice, payment };
+        });
+    } finally {
+        await session.endSession();
     }
-
-    const balanceCents = invoice.total_cents - invoice.paid_amount_cents;
-    if (amount_cents > balanceCents) {
-        throw new ApiError(
-            400,
-            `Payment of ${amount_cents} exceeds remaining balance of ${balanceCents}`,
-            [],
-            '',
-            ErrorCodes.PAYMENT_EXCEEDS_BALANCE
-        );
-    }
-
-    const payment = await invoicingRepository.createPayment({
-        invoice_id: invoiceId,
-        amount_cents,
-        method,
-        reference,
-        recorded_by: actorId,
-    });
-
-    const newPaidAmount = invoice.paid_amount_cents + amount_cents;
-    const updatedInvoice = await invoicingRepository.updateInvoice(invoiceId, {
-        paid_amount_cents: newPaidAmount,
-        status: newPaidAmount >= invoice.total_cents ? 'PAID' : 'PARTIALLY_PAID',
-    });
 
     await logAction({
         actorId,
         action: 'PAYMENT_RECORDED',
         entityType: 'Invoice',
         entityId: invoiceId,
-        metadata: { amount_cents, method, reference, paymentId: payment._id },
+        metadata: { amount_cents, method, reference, paymentId: result.payment._id },
     });
 
-    return { invoice: updatedInvoice, payment };
+    return result;
 };
 
 const listCreditNotes = ({ customer_id, invoice_id } = {}) => {
@@ -239,22 +271,51 @@ const issueCreditNote = async ({ customer_id, invoice_id, amount_cents, reason }
         );
     }
 
-    const creditNote = await invoicingRepository.createCreditNote({
-        customer_id,
-        invoice_id: invoice_id || null,
-        amount_cents,
-        reason,
-        status: 'ISSUED',
-    });
+    const session = await mongoose.startSession();
+    let creditNote;
+    try {
+        await session.withTransaction(async () => {
+            creditNote = await invoicingRepository.createCreditNote(
+                {
+                    customer_id,
+                    invoice_id: invoice_id || null,
+                    amount_cents,
+                    reason,
+                    status: 'ISSUED',
+                },
+                session
+            );
 
-    if (invoice_id) {
-        const invoice = await getInvoiceOrThrow(invoice_id);
+            if (invoice_id) {
+                const invoice = await invoicingRepository.findInvoiceById(invoice_id, session);
+                if (!invoice) {
+                    throw new ApiError(404, 'Invoice not found', [], '', ErrorCodes.NOT_FOUND);
+                }
 
-        const newTotal = Math.max(0, invoice.total_cents - amount_cents);
-        await invoicingRepository.updateInvoice(invoice_id, {
-            total_cents: newTotal,
-            status: newTotal <= invoice.paid_amount_cents ? (newTotal === 0 ? 'CREDITED' : 'PAID') : invoice.status,
+                // total_cents is clamped at 0 by construction: the $inc delta is
+                // capped to what's actually left on the invoice, so a second
+                // concurrent credit note (retried after a write conflict) can
+                // never drive it negative.
+                const cappedDelta = -Math.min(amount_cents, invoice.total_cents);
+                const updatedInvoice = await invoicingRepository.incrementInvoiceAmounts(
+                    invoice_id,
+                    { total_cents: cappedDelta },
+                    session
+                );
+                await invoicingRepository.updateInvoice(
+                    invoice_id,
+                    {
+                        status:
+                            updatedInvoice.total_cents <= updatedInvoice.paid_amount_cents
+                                ? (updatedInvoice.total_cents === 0 ? 'CREDITED' : 'PAID')
+                                : invoice.status,
+                    },
+                    session
+                );
+            }
         });
+    } finally {
+        await session.endSession();
     }
 
     await logAction({

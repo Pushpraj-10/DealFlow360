@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
-import { AlertCircle, Plus, Warehouse } from 'lucide-react';
+import { useAuth } from '@/lib/useAuth';
+import { AlertCircle, Plus, Trash2, Warehouse } from 'lucide-react';
 
 type Warehouse = {
   _id: string;
@@ -12,12 +13,15 @@ type Warehouse = {
 };
 
 export default function WarehousesPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [weight, setWeight] = useState('1.0');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = () => {
     api
@@ -41,6 +45,22 @@ export default function WarehousesPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create warehouse');
+    }
+  };
+
+  const handleDelete = async (warehouse: Warehouse) => {
+    if (!window.confirm(`Delete ${warehouse.name}? It will be deactivated and hidden from fulfillment splits.`)) {
+      return;
+    }
+    setError(null);
+    setDeletingId(warehouse._id);
+    try {
+      await api.del(`/warehouses/${warehouse._id}`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to delete warehouse');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -85,6 +105,7 @@ export default function WarehousesPage() {
                 <th>Warehouse Name</th>
                 <th style={{ textAlign: 'right' }}>Shipping Cost Weight</th>
                 <th>Status</th>
+                {isAdmin && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -97,6 +118,19 @@ export default function WarehousesPage() {
                       {w.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
+                  {isAdmin && (
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        onClick={() => handleDelete(w)}
+                        disabled={!w.active || deletingId === w._id}
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: w.active ? 'var(--red)' : 'var(--text-tertiary)' }}
+                        title={w.active ? 'Delete warehouse' : 'Already deactivated'}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
