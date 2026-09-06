@@ -287,6 +287,20 @@ export default function QuotationsPage() {
     setDismissedRecommendationIds((prev) => new Set(prev).add(productId));
   };
 
+  // Closing must also drop ?quote= from the URL - otherwise the effect above
+  // (which reads window.location.search on every selectedId change) sees the
+  // stale param still there and immediately reopens the same quotation.
+  const closeBuilder = () => {
+    setSelectedId(null);
+    setLines([]);
+    setQuotationDetail(null);
+    setVersions([]);
+    setInfo(null);
+    if (typeof window !== 'undefined' && window.location.search.includes('quote=')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedId) return;
     setError(null);
@@ -549,13 +563,7 @@ export default function QuotationsPage() {
       {selectedId && (
       <div
         className="quotation-builder-popover-layer"
-        onClick={() => {
-          setSelectedId(null);
-          setLines([]);
-          setQuotationDetail(null);
-          setVersions([]);
-          setInfo(null);
-        }}
+        onClick={closeBuilder}
       >
       <section
         className="quotation-builder-section quotation-builder-popover"
@@ -584,13 +592,7 @@ export default function QuotationsPage() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={() => {
-                        setSelectedId(null);
-                        setLines([]);
-                        setQuotationDetail(null);
-                        setVersions([]);
-                        setInfo(null);
-                      }}
+                      onClick={closeBuilder}
                     >
                       Back to list
                     </button>

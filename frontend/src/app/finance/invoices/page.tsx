@@ -13,8 +13,14 @@ import {
   type Invoice,
 } from '@/lib/operations';
 
+const PAYMENT_METHODS = ['cash', 'bank_transfer', 'card', 'other'];
+
+type InvoiceLine = { _id: string; description: string; qty: number; unit_price_cents: number; amount_cents: number; source_type: string };
+type PaymentRow = { _id: string; amount_cents: number; method: string; paid_at: string };
+type InvoiceDetail = { invoice: Invoice; lines: InvoiceLine[]; payments: PaymentRow[] };
+
 function invoiceKind(invoice: Invoice) {
-  return invoice.type || invoice.source_type || (invoice.subscription_id ? 'Subscription' : 'Order');
+  return invoice.subscription_id ? 'Subscription' : 'Order';
 }
 
 function isOverdue(invoice: Invoice) {
@@ -26,8 +32,10 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Invoice | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<InvoiceDetail | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<Invoice | null>(null);
   const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('card');
 
   const load = () => {
     api
@@ -41,17 +49,31 @@ export default function InvoicesPage() {
 
   useEffect(load, []);
 
+  useEffect(() => {
+    if (!selected) {
+      setSelectedDetail(null);
+      return;
+    }
+    api
+      .get<InvoiceDetail>(`/invoices/${selected._id}`)
+      .then(setSelectedDetail)
+      .catch(() => setSelectedDetail(null));
+  }, [selected]);
+
   const handleRecordPayment = async () => {
     if (!paymentTarget) return;
     try {
       await api.post(`/invoices/${paymentTarget._id}/payments`, {
         amount_cents: Math.round(parseFloat(amount) * 100),
-        method: 'card',
+        method,
       });
-      setSelected(null);
       setPaymentTarget(null);
       setAmount('');
+      setMethod('card');
       load();
+      if (selected?._id === paymentTarget._id) {
+        api.get<InvoiceDetail>(`/invoices/${paymentTarget._id}`).then(setSelectedDetail).catch(() => {});
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Payment failed');
     }
@@ -200,15 +222,21 @@ export default function InvoicesPage() {
                 <p>{customerLabel(selected.customer_id)} · Due {formatDate(selected.due_date)}</p>
               </div>
               <div className="ops-progress">
-                {['Confirmed', 'Shipped', 'Invoiced', 'Paid'].map((step) => {
-                  const complete = step === 'Confirmed' || step === 'Shipped' || step === 'Invoiced' || selected.status === 'PAID';
-                  return (
-                    <div key={step} className={complete ? 'complete' : ''}>
-                      <span>{complete ? <Check size={12} /> : <Circle size={10} />}</span>
-                      <strong>{step}</strong>
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const hasShipmentLine = (selectedDetail?.lines || []).some((line) => line.source_type === 'shipment');
+                  return ['Confirmed', 'Shipped', 'Invoiced', 'Paid'].map((step) => {
+                    let complete = false;
+                    if (step === 'Confirmed' || step === 'Invoiced') complete = true;
+                    else if (step === 'Shipped') complete = hasShipmentLine;
+                    else if (step === 'Paid') complete = selected.status === 'PAID';
+                    return (
+                      <div key={step} className={complete ? 'complete' : ''}>
+                        <span>{complete ? <Check size={12} /> : <Circle size={10} />}</span>
+                        <strong>{step}</strong>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
               <dl className="ops-definition-list">
                 <div>
@@ -228,6 +256,48 @@ export default function InvoicesPage() {
                   <dd>{moneyCents(Math.max(0, selected.total_cents - selected.paid_amount_cents))}</dd>
                 </div>
               </dl>
+
+              {selectedDetail && selectedDetail.lines.length > 0 && (
+                <div className="ops-subsection">
+                  <div className="ops-subsection-header"><h3>Line items</h3></div>
+                  <table className="df-table">
+                    <thead>
+                      <tr><th>Description</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                      {selectedDetail.lines.map((line) => (
+                        <tr key={line._id}>
+                          <td>{line.description || formatStatus(line.source_type)}</td>
+                          <td className="num">{line.qty}</td>
+                          <td className="num">{moneyCents(line.unit_price_cents)}</td>
+                          <td className="num">{moneyCents(line.amount_cents)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {selectedDetail && selectedDetail.payments.length > 0 && (
+                <div className="ops-subsection">
+                  <div className="ops-subsection-header"><h3>Payments</h3></div>
+                  <table className="df-table">
+                    <thead>
+                      <tr><th>Date</th><th>Method</th><th className="num">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                      {selectedDetail.payments.map((payment) => (
+                        <tr key={payment._id}>
+                          <td>{formatDate(payment.paid_at)}</td>
+                          <td>{formatStatus(payment.method)}</td>
+                          <td className="num">{moneyCents(payment.amount_cents)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {['UNPAID', 'PARTIALLY_PAID'].includes(selected.status) && (
                 <button onClick={() => setPaymentTarget(selected)} className="btn btn-primary btn-full">
                   Record payment

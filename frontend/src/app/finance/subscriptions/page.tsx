@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, CalendarClock, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
 import {
   customerLabel,
@@ -14,14 +14,25 @@ import {
   type Subscription,
 } from '@/lib/operations';
 
+function orderLabel(sub: Subscription) {
+  const order = sub.order_id;
+  if (!order) return null;
+  if (typeof order === 'string') return `...${order.slice(-8)}`;
+  return order.orderNumber || (order._id ? `...${order._id.slice(-8)}` : null);
+}
+
 export default function SubscriptionsPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [selected, setSelected] = useState<Subscription | null>(null);
   const [modifyTarget, setModifyTarget] = useState<Subscription | null>(null);
   const [newQty, setNewQty] = useState(1);
   const [prorationPreview, setProrationPreview] = useState<number | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Subscription | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [canceling, setCanceling] = useState(false);
 
   const load = () => {
     api.get<Subscription[]>('/subscriptions').then(setSubs).catch((err) =>
@@ -57,12 +68,34 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const cancelSub = async (id: string) => {
+  const openCancel = (sub: Subscription) => {
+    setCancelTarget(sub);
+    setCancelReason('');
+  };
+
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setError(null);
+    setInfo(null);
+    setCanceling(true);
     try {
-      await api.post(`/subscriptions/${id}/cancel`, { reason: 'Cancelled from portal' });
+      const result = await api.post<{ policy: string; creditAmountCents: number }>(
+        `/subscriptions/${cancelTarget._id}/cancel`,
+        { reason: cancelReason || undefined }
+      );
+      setCancelTarget(null);
       load();
+      if (result.creditAmountCents > 0) {
+        setInfo(
+          `Subscription cancelled. A ${result.policy === 'full_refund' ? 'full refund' : 'credit'} of ${moneyCents(result.creditAmountCents)} was issued.`
+        );
+      } else {
+        setInfo('Subscription cancelled. No refund or credit applied under this plan\'s policy.');
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Cancel failed');
+    } finally {
+      setCanceling(false);
     }
   };
 
@@ -92,6 +125,12 @@ export default function SubscriptionsPage() {
         <div className="df-alert df-alert-error">
           <AlertCircle size={14} />
           <span>{error}</span>
+        </div>
+      )}
+      {info && (
+        <div className="df-alert df-alert-success">
+          <CheckCircle2 size={14} />
+          <span>{info}</span>
         </div>
       )}
 
@@ -177,7 +216,7 @@ export default function SubscriptionsPage() {
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
-                                cancelSub(sub._id);
+                                openCancel(sub);
                               }}
                               className="btn btn-danger btn-sm"
                             >
@@ -229,13 +268,19 @@ export default function SubscriptionsPage() {
                   <dt>Current period</dt>
                   <dd>{selected.current_period_start || selected.current_period_end ? `${formatDate(selected.current_period_start)} - ${formatDate(selected.current_period_end)}` : 'Not returned'}</dd>
                 </div>
+                {orderLabel(selected) && (
+                  <div>
+                    <dt>Order</dt>
+                    <dd>{orderLabel(selected)}</dd>
+                  </div>
+                )}
               </dl>
               {selected.status === 'ACTIVE' && (
                 <div className="ops-side-actions">
                   <button onClick={() => openModify(selected)} className="btn btn-primary">
                     Modify subscription
                   </button>
-                  <button onClick={() => cancelSub(selected._id)} className="btn btn-danger">
+                  <button onClick={() => openCancel(selected)} className="btn btn-danger">
                     Cancel
                   </button>
                 </div>
@@ -270,6 +315,43 @@ export default function SubscriptionsPage() {
             <div className="df-modal-footer">
               <button onClick={() => setModifyTarget(null)} className="btn btn-ghost">Close</button>
               <button onClick={confirmModify} className="btn btn-primary">Confirm changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelTarget && (
+        <div className="df-modal-overlay" onClick={() => setCancelTarget(null)}>
+          <div className="df-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="df-modal-header ops-modal-header">
+              <div>
+                <h2 className="df-modal-title">Cancel subscription</h2>
+                <p>{planName(cancelTarget)} for {customerLabel(cancelTarget.customer_id)}</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setCancelTarget(null)}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="df-modal-body">
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0 }}>
+                This cannot be undone. Any refund or credit will be issued per the plan&apos;s cancellation policy.
+              </p>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Reason (optional)</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="df-input"
+                  rows={3}
+                  placeholder="Why is this subscription being cancelled?"
+                />
+              </div>
+            </div>
+            <div className="df-modal-footer">
+              <button onClick={() => setCancelTarget(null)} className="btn btn-ghost" disabled={canceling}>Keep subscription</button>
+              <button onClick={confirmCancel} className="btn btn-danger" disabled={canceling}>
+                {canceling ? 'Cancelling...' : 'Confirm cancellation'}
+              </button>
             </div>
           </div>
         </div>

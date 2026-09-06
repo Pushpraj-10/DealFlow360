@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AlertCircle, PackageCheck, RefreshCw, RotateCcw } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
 import {
@@ -28,8 +29,9 @@ const STATUS_FILTERS = [
 ];
 
 export default function OrdersPage() {
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('id'));
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -266,7 +268,7 @@ export default function OrdersPage() {
                   Retry flow
                 </button>
                 {fulfillmentId && (
-                  <Link className="btn btn-ghost" href="/operations/fulfillment">
+                  <Link className="btn btn-ghost" href={`/operations/fulfillment?id=${fulfillmentId}`}>
                     Open fulfillment
                   </Link>
                 )}

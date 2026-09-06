@@ -24,6 +24,7 @@ export type Allocation = {
   warehouse_id: string;
   allocated_qty: number;
   shipped_qty: number;
+  est_cost?: number;
   status: string;
   quote_line_id?: {
     _id: string;
@@ -95,6 +96,7 @@ export type Warehouse = { _id: string; name: string };
 export type Subscription = {
   _id: string;
   customer_id: CustomerRef;
+  order_id?: { _id?: string; orderNumber?: string; status?: string } | string | null;
   plan_id: { _id: string; name: string; cycle: string; interval?: string } | string;
   status: string;
   qty: number;
@@ -109,10 +111,8 @@ export type Invoice = {
   invoice_no: string;
   customer_id?: CustomerRef;
   quotation_id?: QuotationRef;
-  order_id?: string | { _id?: string; order_no?: string };
   subscription_id?: string | { _id?: string; plan_id?: string | { name?: string; cycle?: string } };
   source_type?: string;
-  type?: string;
   status: string;
   due_date: string;
   total_cents: number;
@@ -225,8 +225,6 @@ export function orderLineLabel(line: OrderLine) {
 }
 
 export function sourceLabel(invoice: Invoice) {
-  if (invoice.order_id && typeof invoice.order_id === 'object') return invoice.order_id.order_no || `...${invoice.order_id._id?.slice(-8)}`;
-  if (typeof invoice.order_id === 'string') return `...${invoice.order_id.slice(-8)}`;
   if (invoice.quotation_id) return quotationLabel(invoice.quotation_id);
   if (invoice.subscription_id) {
     if (typeof invoice.subscription_id === 'string') return `...${invoice.subscription_id.slice(-8)}`;

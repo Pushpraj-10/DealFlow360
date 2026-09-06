@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, PackageCheck, Plus, Route, Truck, X } from 'lucide-react';
 import { api, ApiClientError } from '@/lib/api';
 import {
@@ -17,6 +18,7 @@ import {
   type Allocation,
   type Fulfillment,
   type FulfillmentDetail,
+  type OrderDetail,
   type Warehouse,
 } from '@/lib/operations';
 
@@ -45,11 +47,12 @@ function AllocationBar({ allocation, total }: { allocation: Allocation; total: n
 }
 
 export default function FulfillmentPage() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FulfillmentDetail | null>(null);
+  const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [newQuotationId, setNewQuotationId] = useState('');
@@ -85,7 +88,20 @@ export default function FulfillmentPage() {
   const loadDetail = (id: string) => {
     api
       .get<FulfillmentDetail>(`/fulfillments/${id}`)
-      .then(setDetail)
+      .then((data) => {
+        setDetail(data);
+        const quotationId = typeof data.fulfillment.quotation_id === 'object'
+          ? data.fulfillment.quotation_id?._id
+          : data.fulfillment.quotation_id;
+        if (quotationId) {
+          api
+            .get<OrderDetail>(`/orders/by-quotation/${quotationId}`)
+            .then(setOrderDetail)
+            .catch(() => setOrderDetail(null));
+        } else {
+          setOrderDetail(null);
+        }
+      })
       .catch((err) =>
         setError(err instanceof ApiClientError ? err.message : 'Failed to load detail')
       );
@@ -95,6 +111,15 @@ export default function FulfillmentPage() {
   useEffect(() => {
     if (selectedId) loadDetail(selectedId);
   }, [selectedId]);
+
+  // Coming from the Orders page's "Open fulfillment" link.
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl && idFromUrl !== selectedId) {
+      setSelectedId(idFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,28 +137,16 @@ export default function FulfillmentPage() {
     }
   };
 
-  const runAction = async (action: () => Promise<unknown>) => {
+  const runAction = async (action: () => Promise<unknown>, successMessage?: string) => {
     setError(null);
+    setInfo(null);
     try {
       await action();
       if (selectedId) loadDetail(selectedId);
       loadList();
+      if (successMessage) setInfo(successMessage);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Action failed');
-    }
-  };
-
-  const generateInvoice = async (allocationId: string) => {
-    setError(null);
-    setInfo(null);
-    try {
-      const invoice = await api.post<{ invoice_no: string }>('/invoices', {
-        source_type: 'shipment',
-        fulfillment_allocation_id: allocationId,
-      });
-      setInfo(`Invoice ${invoice.invoice_no} generated for the shipped quantity.`);
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to generate invoice');
     }
   };
 
@@ -237,9 +250,6 @@ export default function FulfillmentPage() {
             <CheckCircle2 size={14} />
             {info}
           </span>
-          <button onClick={() => router.push('/finance/invoices')} className="btn btn-ghost btn-sm">
-            View invoices
-          </button>
         </div>
       )}
 
@@ -332,6 +342,19 @@ export default function FulfillmentPage() {
                 </span>
               </div>
 
+              {orderDetail && (
+                <div className="df-alert df-alert-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span>
+                    Order <strong>{orderDetail.order.orderNumber}</strong> · {formatStatus(orderDetail.order.status)}
+                    {' · billing '}
+                    {formatStatus(orderDetail.order.billingStatus || 'PENDING')}
+                  </span>
+                  <Link className="btn btn-ghost btn-sm" href={`/operations/orders?id=${orderDetail.order._id}`}>
+                    Open order
+                  </Link>
+                </div>
+              )}
+
               <div className="ops-allocation-summary">
                 <div>
                   <span>Units required</span>
@@ -378,7 +401,10 @@ export default function FulfillmentPage() {
                         <div className="ops-allocation-card-head">
                           <div>
                             <strong>{warehouseName(warehouses, allocation.warehouse_id)}</strong>
-                            <small>{lineLabel(allocation)}</small>
+                            <small>
+                              {lineLabel(allocation)}
+                              {allocation.est_cost !== undefined && ` · est. cost ${allocation.est_cost.toFixed(1)}`}
+                            </small>
                           </div>
                           <span className={`status-badge ${operationsStatusClass(allocation.status)}`}>
                             {formatStatus(allocation.status)}
@@ -410,11 +436,6 @@ export default function FulfillmentPage() {
                             >
                               Ship
                             </button>
-                            {allocation.shipped_qty > 0 && (
-                              <button onClick={() => generateInvoice(allocation._id)} className="btn btn-ghost btn-sm">
-                                Generate invoice
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -438,6 +459,19 @@ export default function FulfillmentPage() {
                         <span className={`status-badge ${operationsStatusClass(backorder.status)}`}>
                           {formatStatus(backorder.status)}
                         </span>
+                        {backorder.status !== 'RESOLVED' && (
+                          <button
+                            onClick={() =>
+                              runAction(
+                                () => api.post(`/backorders/${backorder._id}/consolidate`),
+                                'Backorder consolidated against current stock.'
+                              )
+                            }
+                            className="btn btn-secondary btn-sm"
+                          >
+                            Consolidate
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
