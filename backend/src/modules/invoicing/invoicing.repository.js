@@ -5,12 +5,27 @@ import { CreditNote } from './credit-note.model.js';
 import { FulfillmentAllocation } from '../fulfillment/fulfillment-allocation.model.js';
 import { Fulfillment } from '../fulfillment/fulfillment.model.js';
 import { Subscription } from '../subscriptions/subscription.model.js';
+import '../subscriptions/subscription-plan.model.js';
 import { Quotation } from '../quotations/quotation.model.js';
+import '../customers/customer.model.js';
 
-const findInvoices = (filter = {}) => Invoice.find(filter).sort({ created_at: -1 });
+const populateInvoiceRefs = (query) =>
+    query
+        .populate('customer_id', 'name company email')
+        .populate('quotation_id', 'quoteNumber status currentVersion grandTotal currencyCode')
+        .populate({
+            path: 'subscription_id',
+            select: 'plan_id status qty next_bill_date',
+            populate: {
+                path: 'plan_id',
+                select: 'name cycle'
+            }
+        });
+
+const findInvoices = (filter = {}) => populateInvoiceRefs(Invoice.find(filter)).sort({ created_at: -1 });
 
 const findInvoiceById = (id, session) => {
-    const query = Invoice.findById(id);
+    const query = populateInvoiceRefs(Invoice.findById(id));
     return session ? query.session(session) : query;
 };
 

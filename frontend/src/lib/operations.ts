@@ -110,7 +110,7 @@ export type Invoice = {
   customer_id?: CustomerRef;
   quotation_id?: QuotationRef;
   order_id?: string | { _id?: string; order_no?: string };
-  subscription_id?: string | { _id?: string };
+  subscription_id?: string | { _id?: string; plan_id?: string | { name?: string; cycle?: string } };
   source_type?: string;
   type?: string;
   status: string;
@@ -228,7 +228,12 @@ export function sourceLabel(invoice: Invoice) {
   if (invoice.order_id && typeof invoice.order_id === 'object') return invoice.order_id.order_no || `...${invoice.order_id._id?.slice(-8)}`;
   if (typeof invoice.order_id === 'string') return `...${invoice.order_id.slice(-8)}`;
   if (invoice.quotation_id) return quotationLabel(invoice.quotation_id);
-  if (invoice.subscription_id) return typeof invoice.subscription_id === 'string' ? `...${invoice.subscription_id.slice(-8)}` : `...${invoice.subscription_id._id?.slice(-8)}`;
+  if (invoice.subscription_id) {
+    if (typeof invoice.subscription_id === 'string') return `...${invoice.subscription_id.slice(-8)}`;
+    const plan = invoice.subscription_id.plan_id;
+    if (plan && typeof plan === 'object' && plan.name) return plan.name;
+    return `...${invoice.subscription_id._id?.slice(-8)}`;
+  }
   return 'Not returned';
 }
 
