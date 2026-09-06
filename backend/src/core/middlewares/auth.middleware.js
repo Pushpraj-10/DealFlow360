@@ -5,7 +5,9 @@ import {asyncHandler} from '../utils/asyncHandler.js';
 import {INTERNAL_ROLES, USER_ROLES, USER_STATUSES} from '../constants.js';
 import {verifySessionToken} from '../../modules/auth/auth.service.js';
 import {User} from '../../modules/users/user.model.js';
+import {UserSignupRequest} from '../../modules/users/userSignupRequest.model.js';
 import {Quotation} from '../../modules/quotations/quotation.model.js';
+import {Customer} from '../../modules/customers/customer.model.js';
 
 const parseCookies = (cookieHeader = '') => {
     return cookieHeader.split(';').reduce((cookies, cookie) => {
@@ -72,6 +74,46 @@ const requireInternalUser = requireRoles(...INTERNAL_ROLES);
 
 const requireCustomerUser = requireRoles(USER_ROLES.CUSTOMER);
 
+const resolveCustomerIdsForUser = async (user) => {
+    const ids = new Set();
+
+    if (user.customerId) {
+        ids.add(user.customerId.toString());
+    }
+
+    if (user.email) {
+        const matchingCustomers = await Customer.find({
+            email: user.email.toLowerCase(),
+            status: 'ACTIVE'
+        }).select('_id');
+        for (const customer of matchingCustomers) {
+            ids.add(customer._id.toString());
+        }
+    }
+
+    const approvedRequest = await UserSignupRequest.findOne({
+        $or: [
+            {createdUserId: user.id},
+            {email: user.email}
+        ],
+        proposedRole: USER_ROLES.CUSTOMER,
+        status: 'APPROVED'
+    }).select('customerCompany');
+
+    if (approvedRequest?.customerCompany) {
+        const companyCustomers = await Customer.find({
+            company: approvedRequest.customerCompany,
+            status: 'ACTIVE'
+        }).select('_id');
+
+        for (const customer of companyCustomers) {
+            ids.add(customer._id.toString());
+        }
+    }
+
+    return [...ids];
+};
+
 const requireQuotationPortalAccess = asyncHandler(async (req, res, next) => {
     if (!req.user) {
         throw new ApiError(401, 'Authentication required');
@@ -87,9 +129,12 @@ const requireQuotationPortalAccess = asyncHandler(async (req, res, next) => {
         throw new ApiError(404, 'Quotation not found');
     }
 
-    const quotation = await Quotation.findById(quotationId).select('customerId');
+    const [quotation, customerIds] = await Promise.all([
+        Quotation.findById(quotationId).select('customerId'),
+        resolveCustomerIdsForUser(req.user)
+    ]);
 
-    if (!quotation || quotation.customerId.toString() !== req.user.customerId?.toString()) {
+    if (!quotation || !customerIds.includes(quotation.customerId.toString())) {
         throw new ApiError(404, 'Quotation not found');
     }
 
@@ -102,5 +147,6 @@ export {
     requireRoles,
     requireInternalUser,
     requireCustomerUser,
-    requireQuotationPortalAccess
+    requireQuotationPortalAccess,
+    resolveCustomerIdsForUser
 };

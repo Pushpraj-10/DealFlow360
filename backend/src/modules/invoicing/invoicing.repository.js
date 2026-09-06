@@ -52,7 +52,8 @@ const createCreditNote = async (data, session) => {
     return creditNote;
 };
 
-const findCreditNotes = (filter = {}) => CreditNote.find(filter).sort({ created_at: -1 });
+const findCreditNotes = (filter = {}) =>
+    CreditNote.find(filter).populate('customer_id', 'name company email').sort({ created_at: -1 });
 
 const updateInvoice = (id, data, session) =>
     Invoice.findByIdAndUpdate(id, data, { new: true, runValidators: true, session });

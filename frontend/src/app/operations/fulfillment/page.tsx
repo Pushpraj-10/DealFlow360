@@ -21,6 +21,12 @@ import {
 } from '@/lib/operations';
 
 type OverrideRow = { quote_line_id: string; warehouse_id: string; qty: string };
+type ConfirmedQuotation = {
+  id: string;
+  quoteNumber: string;
+  customer?: { name?: string; company?: string } | null;
+  total?: number;
+};
 
 function warehouseName(warehouses: Warehouse[], id: string) {
   return warehouses.find((warehouse) => warehouse._id === id)?.name || `...${id.slice(-8)}`;
@@ -47,6 +53,7 @@ export default function FulfillmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [newQuotationId, setNewQuotationId] = useState('');
+  const [confirmedQuotations, setConfirmedQuotations] = useState<ConfirmedQuotation[]>([]);
   const [shipQty, setShipQty] = useState<Record<string, string>>({});
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [showOverride, setShowOverride] = useState(false);
@@ -63,8 +70,16 @@ export default function FulfillmentPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadConfirmedQuotations = () => {
+    api
+      .get<{ quotations: ConfirmedQuotation[] }>('/quotations?status=CONFIRMED')
+      .then((data) => setConfirmedQuotations(data.quotations || []))
+      .catch(() => setConfirmedQuotations([]));
+  };
+
   useEffect(() => {
     api.get<Warehouse[]>('/warehouses').then(setWarehouses).catch(() => {});
+    loadConfirmedQuotations();
   }, []);
 
   const loadDetail = (id: string) => {
@@ -90,6 +105,7 @@ export default function FulfillmentPage() {
       });
       setNewQuotationId('');
       loadList();
+      loadConfirmedQuotations();
       setSelectedId(created._id);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create fulfillment');
@@ -189,13 +205,20 @@ export default function FulfillmentPage() {
           <p>Review order allocation, shortages, backorders, and shipment actions.</p>
         </div>
         <form onSubmit={handleCreate} className="ops-inline-create">
-          <input
+          <select
             value={newQuotationId}
             onChange={(e) => setNewQuotationId(e.target.value)}
-            placeholder="Quotation ID"
-            className="df-input"
-          />
-          <button className="btn btn-primary">
+            className="df-select"
+            required
+          >
+            <option value="">Confirmed quotation...</option>
+            {confirmedQuotations.map((quotation) => (
+              <option key={quotation.id} value={quotation.id}>
+                {quotation.quoteNumber} · {quotation.customer?.company || quotation.customer?.name || 'Customer'}
+              </option>
+            ))}
+          </select>
+          <button className="btn btn-primary" disabled={!newQuotationId}>
             <Plus size={14} />
             Create fulfillment
           </button>

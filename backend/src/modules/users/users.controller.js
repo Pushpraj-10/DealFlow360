@@ -252,20 +252,28 @@ const approveSignupRequest = asyncHandler(async (req, res) => {
             company: request.customerCompany,
             email: request.email
         });
-
-        if (existingCustomer) {
-            throw new ApiError(409, 'Customer already exists for this company and email');
-        }
-
-        customer = await Customer.create({
-            name: request.customerName,
-            email: request.email,
+        const companyCustomer = existingCustomer || await Customer.findOne({
             company: request.customerCompany,
-            phone: request.customerPhone || null,
-            contactPerson: request.fullName,
-            tierId,
             status: CUSTOMER_STATUSES.ACTIVE
-        });
+        }).sort({updatedAt: -1, createdAt: -1});
+
+        if (companyCustomer) {
+            if (companyCustomer.status !== CUSTOMER_STATUSES.ACTIVE) {
+                throw new ApiError(409, 'Matching customer exists but is not active');
+            }
+
+            customer = companyCustomer;
+        } else {
+            customer = await Customer.create({
+                name: request.customerName,
+                email: request.email,
+                company: request.customerCompany,
+                phone: request.customerPhone || null,
+                contactPerson: request.fullName,
+                tierId,
+                status: CUSTOMER_STATUSES.ACTIVE
+            });
+        }
     }
 
     const user = await User.create({

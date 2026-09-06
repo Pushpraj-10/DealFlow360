@@ -53,6 +53,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method || 'GET',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

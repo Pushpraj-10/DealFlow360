@@ -122,17 +122,17 @@ test('approval routing preserves manager-before-finance sequence', () => {
     assert.equal(steps[1].status, 'PENDING');
 });
 
-test('high risk approval routing makes finance the active first approver', () => {
+test('high risk approval routing keeps sales manager before finance', () => {
     const roles = orderApprovalRolesForRisk([
         USER_ROLES.SALES_MANAGER,
         USER_ROLES.FINANCE
     ], 'HIGH');
     const steps = buildApprovalStepsFromRoles(roles);
 
-    assert.deepEqual(roles, [USER_ROLES.FINANCE, USER_ROLES.SALES_MANAGER]);
-    assert.equal(steps[0].requiredRole, USER_ROLES.FINANCE);
+    assert.deepEqual(roles, [USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE]);
+    assert.equal(steps[0].requiredRole, USER_ROLES.SALES_MANAGER);
     assert.equal(steps[0].status, 'ACTIVE');
-    assert.equal(steps[1].requiredRole, USER_ROLES.SALES_MANAGER);
+    assert.equal(steps[1].requiredRole, USER_ROLES.FINANCE);
     assert.equal(steps[1].status, 'PENDING');
 });
 

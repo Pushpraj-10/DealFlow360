@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { AlertCircle, Plus, CreditCard } from 'lucide-react';
 
-type CreditNote = { _id: string; customer_id: string; amount_cents: number; reason: string; status: string };
+type Customer = { _id: string; name: string; company?: string; email?: string; status?: string };
+type CreditNote = { _id: string; customer_id: string | Customer; amount_cents: number; reason: string; status: string };
 
 function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -15,6 +16,8 @@ export default function CreditNotesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -25,7 +28,21 @@ export default function CreditNotesPage() {
     ).finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  const loadCustomers = useCallback(() => {
+    setCustomersLoading(true);
+    api
+      .get<{ customers: Customer[] }>('/customers')
+      .then((data) => setCustomers(data.customers || []))
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load customers'))
+      .finally(() => setCustomersLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+    queueMicrotask(() => {
+      loadCustomers();
+    });
+  }, [loadCustomers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +71,13 @@ export default function CreditNotesPage() {
           <h1 className="df-page-title">Credit Notes</h1>
           <p className="df-page-subtitle">{notes.length} credit note{notes.length !== 1 ? 's' : ''} issued</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+        <button
+          onClick={() => {
+            setShowModal(true);
+            loadCustomers();
+          }}
+          className="btn btn-primary"
+        >
           <Plus size={13} />
           Issue Credit Note
         </button>
@@ -92,6 +115,7 @@ export default function CreditNotesPage() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'right' }}>Amount</th>
+                <th>Customer</th>
                 <th>Reason</th>
                 <th>Status</th>
               </tr>
@@ -101,6 +125,11 @@ export default function CreditNotesPage() {
                 <tr key={n._id}>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--green)' }}>
                     {money(n.amount_cents)}
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>
+                    {typeof n.customer_id === 'object'
+                      ? [n.customer_id.company || n.customer_id.name, n.customer_id.email].filter(Boolean).join(' · ')
+                      : `...${n.customer_id.slice(-8)}`}
                   </td>
                   <td style={{ color: 'var(--text-secondary)' }}>{n.reason}</td>
                   <td>
@@ -121,8 +150,24 @@ export default function CreditNotesPage() {
             </div>
             <div className="df-modal-body">
               <div className="df-field">
-                <label className="df-label">Customer ID</label>
-                <input value={customerId} onChange={(e) => setCustomerId(e.target.value)} required className="df-input" placeholder="Customer ID" />
+                <label className="df-label">Customer</label>
+                <select
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                  required
+                  className="df-select"
+                >
+                  <option value="">
+                    {customersLoading ? 'Loading customers...' : 'Select customer...'}
+                  </option>
+                  {customers
+                    .filter((customer) => !customer.status || customer.status === 'ACTIVE')
+                    .map((customer) => (
+                      <option key={customer._id} value={customer._id}>
+                        {[customer.company || customer.name, customer.email].filter(Boolean).join(' · ')}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div className="df-field">
                 <label className="df-label">Amount ($)</label>

@@ -114,9 +114,8 @@ export default function PortalQuotationPage() {
   const [message, setMessage] = useState('');
   const [proposedValue, setProposedValue] = useState('');
   const [discountOpen, setDiscountOpen] = useState(false);
-  const [discountScope, setDiscountScope] = useState<'QUOTE' | 'LINE'>('QUOTE');
-  const [discountLineId, setDiscountLineId] = useState('');
-  const [discountPercent, setDiscountPercent] = useState('');
+  const [quoteDiscount, setQuoteDiscount] = useState('');
+  const [lineDiscounts, setLineDiscounts] = useState<Record<string, string>>({});
   const [discountMessage, setDiscountMessage] = useState('');
 
   const load = () => {
@@ -166,17 +165,42 @@ export default function PortalQuotationPage() {
     setError(null);
     setSuccess(null);
 
+    const messages = [];
+
+    if (quoteDiscount.trim()) {
+      messages.push({
+        messageType: 'COUNTER_DISCOUNT',
+        message: discountMessage || `Proposed ${quoteDiscount}% global discount`,
+        proposedValue: { scope: 'QUOTE', discountPercent: Number(quoteDiscount) },
+      });
+    }
+
+    for (const [lineId, discount] of Object.entries(lineDiscounts)) {
+      if (discount.trim()) {
+        const line = quotation.lines.find(l => l.id === lineId);
+        messages.push({
+          messageType: 'COUNTER_DISCOUNT',
+          quotationLineId: lineId,
+          message: discountMessage || `Proposed ${discount}% discount for ${lineName(line!)}`,
+          proposedValue: { scope: 'LINE', discountPercent: Number(discount) },
+        });
+      }
+    }
+
+    if (messages.length === 0) {
+      setError('Please propose at least one discount.');
+      return;
+    }
+
     try {
-      await api.post(`/negotiations/quotations/${quotation.id}/discount-proposals`, {
-        scope: discountScope,
-        quotationLineId: discountScope === 'LINE' ? discountLineId : null,
-        proposedDiscountPercent: Number(discountPercent),
-        message: discountMessage,
+      await api.post(`/negotiations/quotations/${quotation.id}`, {
+        messages,
+        reason: 'Customer proposed bulk discount changes'
       });
       setDiscountOpen(false);
-      setDiscountPercent('');
+      setQuoteDiscount('');
+      setLineDiscounts({});
       setDiscountMessage('');
-      setDiscountLineId('');
       setSuccess('Discount proposal submitted.');
       load();
     } catch (err) {
@@ -405,40 +429,61 @@ export default function PortalQuotationPage() {
 
       {discountOpen && quotation && (
         <div className="df-modal-overlay" onClick={() => setDiscountOpen(false)}>
-          <form onSubmit={submitDiscountProposal} className="df-modal" onClick={(event) => event.stopPropagation()}>
+          <form onSubmit={submitDiscountProposal} className="df-modal df-modal-wide" onClick={(event) => event.stopPropagation()}>
             <div className="df-modal-header portal-modal-header">
               <div>
-                <h2 className="df-modal-title">Propose discount</h2>
-                <p>Request a larger discount without changing the accepted quote directly.</p>
+                <h2 className="df-modal-title">Propose discounts</h2>
+                <p>Request discounts for the entire quotation or specific line items.</p>
               </div>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDiscountOpen(false)}>
                 <X size={14} />
               </button>
             </div>
-            <div className="df-modal-body">
+            <div className="df-modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
               <div className="df-field">
-                <label className="df-label">Scope</label>
-                <select value={discountScope} onChange={(event) => setDiscountScope(event.target.value as 'QUOTE' | 'LINE')} className="df-select">
-                  <option value="QUOTE">Entire quotation</option>
-                  <option value="LINE">Specific line</option>
-                </select>
+                <label className="df-label">Global Quote Discount %</label>
+                <input value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} className="df-input" type="number" min="0" max="100" step="0.01" placeholder="Leave blank for no global discount" />
               </div>
-              {discountScope === 'LINE' && (
-                <div className="df-field">
-                  <label className="df-label">Line</label>
-                  <select value={discountLineId} onChange={(event) => setDiscountLineId(event.target.value)} className="df-select" required>
-                    <option value="">Select line</option>
-                    {quotation.lines.map((line) => <option key={line.id} value={line.id}>{lineName(line)}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="df-field">
-                <label className="df-label">Proposed discount %</label>
-                <input value={discountPercent} onChange={(event) => setDiscountPercent(event.target.value)} className="df-input" type="number" min="0" max="100" step="0.01" required />
+
+              <div className="portal-table-wrap" style={{ margin: '24px 0' }}>
+                <table className="df-table portal-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th className="num">Current %</th>
+                      <th>Proposed %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quotation.lines.map((line) => (
+                      <tr key={line.id}>
+                        <td>
+                          <strong>{lineName(line)}</strong>
+                          <small>{line.variant?.sku || line.product?.unit || line.lineType}</small>
+                        </td>
+                        <td className="num">{line.discountPercent}%</td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            className="df-input"
+                            style={{ padding: '6px 10px', minHeight: 'auto', width: '100px' }}
+                            placeholder="%"
+                            value={lineDiscounts[line.id] || ''}
+                            onChange={(e) => setLineDiscounts({ ...lineDiscounts, [line.id]: e.target.value })}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
               <div className="df-field">
-                <label className="df-label">Message</label>
-                <textarea value={discountMessage} onChange={(event) => setDiscountMessage(event.target.value)} className="df-input portal-textarea" required />
+                <label className="df-label">Message (Optional)</label>
+                <textarea value={discountMessage} onChange={(event) => setDiscountMessage(event.target.value)} className="df-input portal-textarea" placeholder="Add a comment for the sales rep..." />
               </div>
             </div>
             <div className="df-modal-footer">

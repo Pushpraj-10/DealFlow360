@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiClientError } from '@/lib/api';
 import { useAuth } from '@/lib/useAuth';
 import {
@@ -26,7 +26,14 @@ import {
 } from '@/lib/salesRep';
 import { TableSkeletonRows } from '@/components/ui/primitives';
 
-type Customer = { _id: string; name: string; company: string; status?: string };
+type Customer = {
+  _id: string;
+  name: string;
+  company: string;
+  email?: string;
+  status?: string;
+  tierId?: string | { _id: string; name?: string; defaultMaxDiscountPercent?: number };
+};
 type ProductVariant = {
   _id: string;
   sku: string;
@@ -125,6 +132,7 @@ export default function QuotationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<UpsellRecommendation[]>([]);
   const [recommendationsCurrency, setRecommendationsCurrency] = useState('USD');
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
@@ -139,13 +147,29 @@ export default function QuotationsPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadReferenceData = useCallback(async () => {
+    if (!canEdit) return;
+    setReferenceLoading(true);
+    try {
+      const [customerData, productData] = await Promise.all([
+        api.get<{ customers: Customer[] }>('/customers'),
+        api.get<{ products: Product[] }>('/products'),
+      ]);
+      setCustomers(customerData.customers || []);
+      setProducts(productData.products || []);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load customers and products from database');
+    } finally {
+      setReferenceLoading(false);
+    }
+  }, [canEdit]);
+
   useEffect(() => {
     loadQuotations();
-    if (canEdit) {
-      api.get<{ customers: Customer[] }>('/customers').then((d) => setCustomers(d.customers)).catch(() => {});
-    }
-    api.get<{ products: Product[] }>('/products').then((d) => setProducts(d.products)).catch(() => {});
-  }, [canEdit]);
+    queueMicrotask(() => {
+      loadReferenceData();
+    });
+  }, [loadReferenceData]);
 
   const loadLines = (id: string) => {
     api
@@ -308,6 +332,7 @@ export default function QuotationsPage() {
     loadLines(id);
     loadVersions(id);
     loadRecommendations(id);
+    loadReferenceData();
     setInfo(null);
   };
 
@@ -361,6 +386,11 @@ export default function QuotationsPage() {
   const selectedLineProduct = activeProducts.find((product) => product._id === lineForm.productId) || null;
   const selectedLineProductVariants = selectedLineProduct?.variants?.filter((variant) => variant._id) || [];
 
+  const customerOptionLabel = (customer: Customer) => {
+    const tier = typeof customer.tierId === 'object' ? customer.tierId?.name : null;
+    return [customer.company || customer.name, customer.email, tier].filter(Boolean).join(' · ');
+  };
+
   return (
     <div className={`sales-page quotations-page${selectedId ? ' quotations-page--has-selection' : ''}`}>
       <div className="sales-page-heading quotations-page__header">
@@ -370,7 +400,14 @@ export default function QuotationsPage() {
           <p>Create drafts, review terms, and submit quotes without leaving the sales flow.</p>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" onClick={() => setShowNewForm(!showNewForm)}>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              const next = !showNewForm;
+              setShowNewForm(next);
+              if (next) loadReferenceData();
+            }}
+          >
             <Plus size={14} />
             New quotation
           </button>
@@ -426,10 +463,14 @@ export default function QuotationsPage() {
                 <option value="">Choose customer...</option>
                 {activeCustomers.map((c) => (
                   <option key={c._id} value={c._id}>
-                    {c.company || c.name}
+                    {customerOptionLabel(c)}
                   </option>
                 ))}
               </select>
+              {referenceLoading && <small>Loading database customers...</small>}
+              {!referenceLoading && activeCustomers.length === 0 && (
+                <small>No active customers returned from the database.</small>
+              )}
             </label>
             <div className="sales-create-card__actions">
               <button type="button" className="btn btn-ghost" onClick={() => setShowNewForm(false)}>Cancel</button>

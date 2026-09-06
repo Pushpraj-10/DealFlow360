@@ -38,13 +38,18 @@ const buildApprovalStepsFromRoles = (roles) => {
 };
 
 const orderApprovalRolesForRisk = (roles, severity) => {
-    if (severity !== 'HIGH' || !roles.includes(USER_ROLES.FINANCE)) {
+    if (
+        severity !== 'HIGH' ||
+        !roles.includes(USER_ROLES.SALES_MANAGER) ||
+        !roles.includes(USER_ROLES.FINANCE)
+    ) {
         return roles;
     }
 
     return [
+        USER_ROLES.SALES_MANAGER,
         USER_ROLES.FINANCE,
-        ...roles.filter((role) => role !== USER_ROLES.FINANCE)
+        ...roles.filter((role) => ![USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE].includes(role))
     ];
 };
 
@@ -153,7 +158,6 @@ const applyApprovalDecision = async ({approvalRequestId, reviewer, decision, rea
     }
 
     await approvalRequest.save();
-    await quotation.save();
 
     await QuotationVersion.findOneAndUpdate(
         {

@@ -32,6 +32,7 @@ import {
 } from './quotations.service.js';
 import {transitionQuotationState} from './quotationState.service.js';
 import {runConfirmedQuotationFlow} from '../orders/orderFlowOrchestrator.service.js';
+import {resolveCustomerIdsForUser} from '../../core/middlewares/auth.middleware.js';
 
 const validateObjectId = (value, label) => {
     if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -223,6 +224,75 @@ const toQuotationListItem = (quotation, lastActivity) => ({
     }
 });
 
+const reconcileApprovedQuotationStatuses = async (quotations) => {
+    const quotationList = Array.isArray(quotations) ? quotations : [quotations].filter(Boolean);
+    const stalePendingQuotations = quotationList.filter((quotation) => (
+        quotation.status === QUOTATION_STATUSES.PENDING_APPROVAL ||
+        quotation.approvalStatus === APPROVAL_STATUSES.PENDING
+    ));
+
+    if (!stalePendingQuotations.length) {
+        return;
+    }
+
+    const approvedRequests = await ApprovalRequest.find({
+        quotationId: {$in: stalePendingQuotations.map((quotation) => quotation._id)},
+        status: APPROVAL_STATUSES.APPROVED
+    }).select('quotationId quotationVersion');
+
+    if (!approvedRequests.length) {
+        return;
+    }
+
+    const approvedVersionKeys = new Set(
+        approvedRequests.map((request) => `${request.quotationId.toString()}:${request.quotationVersion}`)
+    );
+    const updates = [];
+
+    for (const quotation of stalePendingQuotations) {
+        if (!approvedVersionKeys.has(`${quotation._id.toString()}:${quotation.currentVersion}`)) {
+            continue;
+        }
+
+        quotation.status = QUOTATION_STATUSES.APPROVED;
+        quotation.approvalStatus = APPROVAL_STATUSES.APPROVED;
+        updates.push(Quotation.updateOne(
+            {
+                _id: quotation._id,
+                currentVersion: quotation.currentVersion,
+                $or: [
+                    {status: QUOTATION_STATUSES.PENDING_APPROVAL},
+                    {approvalStatus: APPROVAL_STATUSES.PENDING}
+                ]
+            },
+            {
+                $set: {
+                    status: QUOTATION_STATUSES.APPROVED,
+                    approvalStatus: APPROVAL_STATUSES.APPROVED
+                }
+            }
+        ));
+        updates.push(QuotationVersion.updateOne(
+            {
+                quotationId: quotation._id,
+                versionNumber: quotation.currentVersion,
+                $or: [
+                    {status: QUOTATION_STATUSES.PENDING_APPROVAL},
+                    {approvalStatus: APPROVAL_STATUSES.PENDING}
+                ]
+            },
+            {
+                $set: {
+                    status: QUOTATION_STATUSES.APPROVED,
+                    approvalStatus: APPROVAL_STATUSES.APPROVED
+                }
+            }
+        ));
+    }
+
+    await Promise.all(updates);
+};
+
 const assertCanEditQuotation = async (quotation, user, reason) => {
     if (
         user.role === USER_ROLES.SALES_REP &&
@@ -245,6 +315,7 @@ const listQuotations = asyncHandler(async (req, res) => {
     .populate('salesRepId', 'fullName email role')
     .populate('ownerId', 'fullName email role')
     .sort({updatedAt: -1, createdAt: -1});
+    await reconcileApprovedQuotationStatuses(quotations);
     const lastActivityMap = await getLastActivityMap(quotations.map((quotation) => quotation._id));
     const items = quotations.map((quotation) => toQuotationListItem(
         quotation,
@@ -262,6 +333,7 @@ const getQuotationPipeline = asyncHandler(async (req, res) => {
     .populate('customerId', 'name company')
     .populate('ownerId', 'fullName email role')
     .sort({updatedAt: -1});
+    await reconcileApprovedQuotationStatuses(quotations);
     const lastActivityMap = await getLastActivityMap(quotations.map((quotation) => quotation._id));
     const stageOrder = Object.values(QUOTATION_STATUSES);
     const stageMap = new Map(stageOrder.map((status) => [status, {
@@ -387,6 +459,8 @@ const getQuotationDetail = asyncHandler(async (req, res) => {
     if (!quotation) {
         throw new ApiError(404, 'Quotation not found');
     }
+
+    await reconcileApprovedQuotationStatuses(quotation);
 
     if (
         req.user.role === USER_ROLES.SALES_REP &&
@@ -969,12 +1043,14 @@ const confirmQuotation = asyncHandler(async (req, res) => {
 });
 
 const listCustomerPortalQuotations = asyncHandler(async (req, res) => {
+    const customerIds = await resolveCustomerIdsForUser(req.user);
+
     const quotations = await Quotation.find({
-        customerId: req.user.customerId,
-        status: {$nin: [QUOTATION_STATUSES.DRAFT, QUOTATION_STATUSES.PENDING_APPROVAL]}
+        customerId: {$in: customerIds}
     })
     .select('quoteNumber status grandTotal currencyCode createdAt updatedAt')
     .sort({updatedAt: -1});
+    await reconcileApprovedQuotationStatuses(quotations);
 
     const items = quotations.map((quotation) => ({
         id: quotation._id,
@@ -998,6 +1074,8 @@ const getCustomerPortalQuotation = asyncHandler(async (req, res) => {
     if (!quotation) {
         throw new ApiError(404, 'Quotation not found');
     }
+
+    await reconcileApprovedQuotationStatuses(quotation);
 
     const [lines, negotiations, messages] = await Promise.all([
         QuotationLine.find({quotationId: quotation._id})
