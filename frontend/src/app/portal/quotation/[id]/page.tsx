@@ -213,8 +213,15 @@ export default function PortalQuotationPage() {
     setError(null);
     setSuccess(null);
     try {
-      await api.post(`/quotations/${quotation.id}/confirm`, { reason: 'Customer confirmed from portal' });
-      setSuccess('Quotation confirmed successfully.');
+      const result = await api.post<{ orderFlow?: { failed?: boolean; stage?: string; message?: string } }>(
+        `/quotations/${quotation.id}/confirm`,
+        { reason: 'Customer confirmed from portal' }
+      );
+      if (result?.orderFlow?.failed) {
+        setError(`Quotation confirmed, but order processing failed at "${result.orderFlow.stage}": ${result.orderFlow.message}. Our team has been notified and will retry shortly.`);
+      } else {
+        setSuccess('Quotation confirmed successfully.');
+      }
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to confirm quotation');
