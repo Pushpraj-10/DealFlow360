@@ -7,7 +7,8 @@ import {APPROVAL_STATUSES, AUDIT_ACTIONS, CUSTOMER_STATUSES, QUOTATION_STATUSES,
 import {ApprovalRequest} from '../approvals/approval.model.js';
 import {
     buildApprovalStepsFromRoles,
-    evaluateApprovalRule
+    evaluateApprovalRule,
+    orderApprovalRolesForRisk
 } from '../approvals/approvals.service.js';
 import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {AuditLog} from '../auditLogs/auditLog.model.js';
@@ -30,6 +31,7 @@ import {
     recalculateQuotationCommercials
 } from './quotations.service.js';
 import {transitionQuotationState} from './quotationState.service.js';
+import {runConfirmedQuotationFlow} from '../orders/orderFlowOrchestrator.service.js';
 
 const validateObjectId = (value, label) => {
     if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -206,7 +208,10 @@ const toQuotationListItem = (quotation, lastActivity) => ({
         fullName: quotation.ownerId.fullName,
         email: quotation.ownerId.email
     } : null,
+    currentVersion: quotation.currentVersion,
+    confirmedVersion: quotation.confirmedVersion,
     createdAt: quotation.createdAt,
+    updatedAt: quotation.updatedAt,
     lastActivity: lastActivity ? {
         action: lastActivity.action,
         actorRole: lastActivity.actorRole,
@@ -239,7 +244,7 @@ const listQuotations = asyncHandler(async (req, res) => {
     .populate('customerId', 'name company tierId')
     .populate('salesRepId', 'fullName email role')
     .populate('ownerId', 'fullName email role')
-    .sort({createdAt: -1});
+    .sort({updatedAt: -1, createdAt: -1});
     const lastActivityMap = await getLastActivityMap(quotations.map((quotation) => quotation._id));
     const items = quotations.map((quotation) => toQuotationListItem(
         quotation,
@@ -287,6 +292,8 @@ const getQuotationPipeline = asyncHandler(async (req, res) => {
                 company: quotation.customerId.company
             } : null,
             amount: quotation.grandTotal,
+            currentVersion: quotation.currentVersion,
+            confirmedVersion: quotation.confirmedVersion,
             riskSeverity: quotation.riskSeverity,
             owner: quotation.ownerId ? {
                 id: quotation.ownerId._id,
@@ -724,20 +731,22 @@ const submitQuotation = asyncHandler(async (req, res) => {
 
     if (approvalDecision.approvalRequired) {
         await ApprovalRequest.updateMany(
-            {quotationId: quotation._id, status: 'PENDING'},
-            {$set: {status: 'CANCELLED'}}
+            {quotationId: quotation._id, status: APPROVAL_STATUSES.PENDING},
+            {$set: {status: APPROVAL_STATUSES.CANCELLED}}
         );
+
+        const approvalRoles = orderApprovalRolesForRisk(approvalDecision.requiredApprovalRoles, risk.severity);
 
         approvalRequest = await ApprovalRequest.create({
             quotationId: quotation._id,
             quotationVersion: updatedQuotation.currentVersion,
             requestedById: req.user.id,
-            status: 'PENDING',
+            status: APPROVAL_STATUSES.PENDING,
             riskLevel: risk.severity,
             riskScore: risk.totalRiskScore,
             totalExcessDiscountExposure: risk.totalExcessDiscountExposure,
             approvalRuleId: approvalDecision.rule._id,
-            steps: buildApprovalStepsFromRoles(approvalDecision.requiredApprovalRoles)
+            steps: buildApprovalStepsFromRoles(approvalRoles)
         });
 
         await createAuditLog({
@@ -949,9 +958,14 @@ const confirmQuotation = asyncHandler(async (req, res) => {
         }
     });
 
+    const orderFlow = await runConfirmedQuotationFlow({
+        quotationId: quotation._id,
+        actor: req.user
+    });
+
     return res
     .status(200)
-    .json(new ApiResponse(200, {quotation: updatedQuotation}, 'Quotation confirmed successfully'));
+    .json(new ApiResponse(200, {quotation: updatedQuotation, orderFlow}, 'Quotation confirmed successfully'));
 });
 
 const listCustomerPortalQuotations = asyncHandler(async (req, res) => {

@@ -47,7 +47,6 @@ import {
   formatDate,
   formatStatus as formatOpsStatus,
   fulfillmentCustomer,
-  isOpenFulfillment,
   moneyCents as opsMoney,
   operationsStatusClass,
   planName,
@@ -55,6 +54,7 @@ import {
   type Backorder,
   type Fulfillment,
   type Invoice,
+  type Order,
   type Subscription,
 } from '@/lib/operations';
 
@@ -446,6 +446,7 @@ function SalesManagerOverview() {
 }
 
 function FinanceOperationsOverview() {
+  const [orders, setOrders] = useState<Order[]>([]);
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
   const [backorders, setBackorders] = useState<Backorder[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -462,7 +463,8 @@ function FinanceOperationsOverview() {
       setLoading(true);
       setError(null);
       try {
-        const [fulfillmentData, backorderData, subscriptionData, invoiceData, approvalData] = await Promise.all([
+        const [orderData, fulfillmentData, backorderData, subscriptionData, invoiceData, approvalData] = await Promise.all([
+          api.get<{ orders: Order[] }>('/orders'),
           api.get<Fulfillment[]>('/fulfillments'),
           api.get<Backorder[]>('/backorders'),
           api.get<Subscription[]>('/subscriptions'),
@@ -471,6 +473,7 @@ function FinanceOperationsOverview() {
         ]);
 
         if (!mounted) return;
+        setOrders(orderData.orders || []);
         setFulfillments(fulfillmentData);
         setBackorders(backorderData);
         setSubscriptions(subscriptionData);
@@ -490,7 +493,8 @@ function FinanceOperationsOverview() {
     };
   }, []);
 
-  const openFulfillments = fulfillments.filter((item) => isOpenFulfillment(item.status));
+  const openOrders = orders.filter((item) => !['COMPLETED', 'BILLED', 'CANCELLED'].includes(item.status?.toUpperCase()));
+  const failedOrders = orders.filter((item) => item.status === 'FLOW_FAILED');
   const reviewSplits = fulfillments.filter((item) => {
     const status = item.status?.toUpperCase() || '';
     return status.includes('SPLIT') || status === 'PENDING' || status === 'PENDING_REVIEW';
@@ -507,6 +511,14 @@ function FinanceOperationsOverview() {
     .sort((a, b) => new Date(a.next_bill_date).getTime() - new Date(b.next_bill_date).getTime());
 
   const attentionItems = [
+    ...failedOrders.map((item) => ({
+      id: `order-${item._id}`,
+      label: item.orderNumber,
+      detail: item.flow?.lastError || 'Order flow needs retry',
+      meta: `${item.flow?.lastFailedStage || 'FLOW FAILED'} - ${opsTimeAgo(item.updatedAt || item.createdAt)}`,
+      href: '/operations/orders',
+      tone: 'red',
+    })),
     ...reviewSplits.map((item) => ({
       id: `split-${item._id}`,
       label: fulfillmentCustomer(item),
@@ -545,8 +557,8 @@ function FinanceOperationsOverview() {
           <h1>Operations today</h1>
           <p>What operational work requires action.</p>
         </div>
-        <Link href="/operations/fulfillment" className="btn btn-primary">
-          Open fulfillment
+        <Link href="/operations/orders" className="btn btn-primary">
+          Open orders
           <ArrowRight size={14} />
         </Link>
       </section>
@@ -560,9 +572,9 @@ function FinanceOperationsOverview() {
 
       <section className="ops-work-grid">
         <div className="ops-primary-metric">
-          <span>Orders awaiting fulfillment</span>
-          <strong>{loading ? '...' : openFulfillments.length}</strong>
-          <small>{reviewSplits.length} warehouse split{reviewSplits.length === 1 ? '' : 's'} require review</small>
+          <span>Open orders</span>
+          <strong>{loading ? '...' : openOrders.length}</strong>
+          <small>{failedOrders.length} failed flow{failedOrders.length === 1 ? '' : 's'} need retry</small>
         </div>
         <div className="ops-secondary-metrics">
           <div>
@@ -629,7 +641,7 @@ function FinanceOperationsOverview() {
               <p className="ops-eyebrow">Recent Fulfillment</p>
               <h2>Latest order movement</h2>
             </div>
-            <Link href="/operations/fulfillment">View all</Link>
+            <Link href="/operations/orders">View orders</Link>
           </div>
           {loading ? (
             <div className="ops-compact-table">

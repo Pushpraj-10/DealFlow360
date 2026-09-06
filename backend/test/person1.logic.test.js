@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {USER_ROLES} from '../src/core/constants.js';
-import {buildApprovalStepsFromRoles} from '../src/modules/approvals/approvals.service.js';
+import {ORDER_LINE_STATUSES, ORDER_STATUSES, USER_ROLES} from '../src/core/constants.js';
+import {buildApprovalStepsFromRoles, orderApprovalRolesForRisk} from '../src/modules/approvals/approvals.service.js';
 import {resolveAllowedDiscountFromLimits} from '../src/modules/discountRules/discountRules.service.js';
 import {calculateBlendedRiskFromLines, getSeverity} from '../src/modules/riskEngine/riskEngine.service.js';
 import {assertValidQuotationTransition} from '../src/modules/quotations/quotationState.service.js';
@@ -122,6 +122,29 @@ test('approval routing preserves manager-before-finance sequence', () => {
     assert.equal(steps[1].status, 'PENDING');
 });
 
+test('high risk approval routing makes finance the active first approver', () => {
+    const roles = orderApprovalRolesForRisk([
+        USER_ROLES.SALES_MANAGER,
+        USER_ROLES.FINANCE
+    ], 'HIGH');
+    const steps = buildApprovalStepsFromRoles(roles);
+
+    assert.deepEqual(roles, [USER_ROLES.FINANCE, USER_ROLES.SALES_MANAGER]);
+    assert.equal(steps[0].requiredRole, USER_ROLES.FINANCE);
+    assert.equal(steps[0].status, 'ACTIVE');
+    assert.equal(steps[1].requiredRole, USER_ROLES.SALES_MANAGER);
+    assert.equal(steps[1].status, 'PENDING');
+});
+
+test('medium risk approval routing keeps configured approver order', () => {
+    const roles = orderApprovalRolesForRisk([
+        USER_ROLES.SALES_MANAGER,
+        USER_ROLES.FINANCE
+    ], 'MEDIUM');
+
+    assert.deepEqual(roles, [USER_ROLES.SALES_MANAGER, USER_ROLES.FINANCE]);
+});
+
 test('risk severity thresholds are configurable', () => {
     assert.equal(getSeverity(0, {low: 0.01, medium: 2, high: 6}), 'NONE');
     assert.equal(getSeverity(1, {low: 0.01, medium: 2, high: 6}), 'LOW');
@@ -172,4 +195,23 @@ test('confirmed quotation handoff payload excludes internal cost, margin, and ri
     assert.equal(Object.hasOwn(handoffLine, 'costPrice'), false);
     assert.equal(Object.hasOwn(handoffLine, 'marginAmount'), false);
     assert.equal(Object.hasOwn(handoffLine, 'riskScore'), false);
+});
+
+test('order pipeline statuses cover retryable fulfillment and billing stages', () => {
+    assert.equal(ORDER_STATUSES.ORDER_CREATED, 'ORDER_CREATED');
+    assert.equal(ORDER_STATUSES.SPLIT_PROPOSED, 'SPLIT_PROPOSED');
+    assert.equal(ORDER_STATUSES.PARTIAL_BACKORDER, 'PARTIAL_BACKORDER');
+    assert.equal(ORDER_STATUSES.FLOW_FAILED, 'FLOW_FAILED');
+    assert.equal(ORDER_LINE_STATUSES.AWAITING_ALLOCATION, 'AWAITING_ALLOCATION');
+    assert.equal(ORDER_LINE_STATUSES.SUBSCRIPTION_ACTIVE, 'SUBSCRIPTION_ACTIVE');
+});
+
+test('confirmed quote to order idempotency key is quotation plus confirmed version', () => {
+    const orderKey = (quotation) => `${quotation._id}:v${quotation.confirmedVersion || quotation.currentVersion}`;
+
+    assert.equal(orderKey({_id: 'quote-1', currentVersion: 2, confirmedVersion: 2}), 'quote-1:v2');
+    assert.notEqual(
+        orderKey({_id: 'quote-1', currentVersion: 3, confirmedVersion: 3}),
+        orderKey({_id: 'quote-1', currentVersion: 2, confirmedVersion: 2})
+    );
 });

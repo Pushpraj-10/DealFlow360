@@ -16,6 +16,9 @@ const findSubscriptions = (filter = {}) => Subscription.find(filter).populate('p
 const findSubscriptionsByQuoteLineIds = (quoteLineIds) =>
     Subscription.find({ originating_quote_line_id: { $in: quoteLineIds } }).populate('plan_id');
 
+const findSubscriptionByQuoteLineId = (quoteLineId) =>
+    Subscription.findOne({ originating_quote_line_id: quoteLineId }).populate('plan_id');
+
 const findSubscriptionById = (id, session) => {
     const query = Subscription.findById(id).populate('plan_id');
     return session ? query.session(session) : query;
@@ -41,6 +44,7 @@ export {
     updatePlanById,
     findSubscriptions,
     findSubscriptionsByQuoteLineIds,
+    findSubscriptionByQuoteLineId,
     findSubscriptionById,
     createSubscription,
     updateSubscription,

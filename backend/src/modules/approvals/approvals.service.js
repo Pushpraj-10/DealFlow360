@@ -1,4 +1,4 @@
-import {APPROVAL_STATUSES, APPROVAL_STEP_STATUSES, AUDIT_ACTIONS, QUOTATION_STATUSES} from '../../core/constants.js';
+import {APPROVAL_STATUSES, APPROVAL_STEP_STATUSES, AUDIT_ACTIONS, QUOTATION_STATUSES, USER_ROLES} from '../../core/constants.js';
 import {ApiError} from '../../core/utils/apiError.js';
 import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {Quotation} from '../quotations/quotation.model.js';
@@ -37,6 +37,17 @@ const buildApprovalStepsFromRoles = (roles) => {
     }));
 };
 
+const orderApprovalRolesForRisk = (roles, severity) => {
+    if (severity !== 'HIGH' || !roles.includes(USER_ROLES.FINANCE)) {
+        return roles;
+    }
+
+    return [
+        USER_ROLES.FINANCE,
+        ...roles.filter((role) => role !== USER_ROLES.FINANCE)
+    ];
+};
+
 const getActiveStep = (approvalRequest) => {
     return approvalRequest.steps.find((step) => step.status === APPROVAL_STEP_STATUSES.ACTIVE) || null;
 };
@@ -59,7 +70,7 @@ const listActiveApprovalsForRole = async (role) => {
         ]
     })
     .populate('requestedById', 'fullName email role')
-    .sort({createdAt: 1});
+    .sort({createdAt: -1, updatedAt: -1});
 };
 
 const applyApprovalDecision = async ({approvalRequestId, reviewer, decision, reason}) => {
@@ -200,6 +211,7 @@ const approvalsService = Object.freeze({
     moduleName: 'approvals',
     evaluateApprovalRule,
     buildApprovalStepsFromRoles,
+    orderApprovalRolesForRisk,
     getActiveStep,
     listActiveApprovalsForRole,
     applyApprovalDecision
@@ -209,6 +221,7 @@ export {
     approvalsService,
     evaluateApprovalRule,
     buildApprovalStepsFromRoles,
+    orderApprovalRolesForRisk,
     getActiveStep,
     listActiveApprovalsForRole,
     applyApprovalDecision

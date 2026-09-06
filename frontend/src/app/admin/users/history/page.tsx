@@ -22,7 +22,7 @@ type DirectoryRow = {
 type Pagination = { page: number; limit: number; total: number; totalPages: number };
 
 const PAGE_SIZE = 8;
-const INTERNAL_ROLES = ['SALES_REP', 'SALES_MANAGER', 'FINANCE', 'ADMIN'];
+const REQUEST_ROLES = ['SALES_REP', 'SALES_MANAGER', 'FINANCE', 'ADMIN', 'CUSTOMER'];
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'ACTIVE', label: 'Account active' },
@@ -62,15 +62,14 @@ export default function UserHistoryPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (search.trim()) params.set('search', search.trim());
     if (role) params.set('role', role);
     if (status) params.set('status', status);
 
     const handle = setTimeout(() => {
+      setLoading(true);
+      setError(null);
       api
         .get<{ rows: DirectoryRow[]; pagination: Pagination }>(`/users/directory?${params.toString()}`)
         .then((d) => {
@@ -106,7 +105,7 @@ export default function UserHistoryPage() {
         <div>
           <p className="admin-eyebrow">Governance</p>
           <h1>Request History</h1>
-          <p>Every internal account and signup request, merged one row per person.</p>
+          <p>Every approved account and reviewed signup request, merged one row per person.</p>
         </div>
       </div>
 
@@ -138,7 +137,7 @@ export default function UserHistoryPage() {
             onChange={(e) => { setRole(e.target.value); setPage(1); }}
           >
             <option value="">All roles</option>
-            {INTERNAL_ROLES.map((r) => (
+            {REQUEST_ROLES.map((r) => (
               <option key={r} value={r}>{formatRole(r)}</option>
             ))}
           </select>

@@ -16,6 +16,7 @@ import usersRoutes from './users/users.routes.js';
 import warehouseRouter from './warehouses/warehouse.router.js';
 import inventoryRouter from './inventory/inventory.router.js';
 import { fulfillmentRouter, backorderRouter } from './fulfillment/fulfillment.router.js';
+import ordersRoutes from './orders/orders.routes.js';
 import subscriptionRouter from './subscriptions/subscription.router.js';
 import invoicingRouter from './invoicing/invoicing.router.js';
 import dealHealthRouter from './deal-health/deal-health.router.js';
@@ -40,6 +41,7 @@ const registerModuleRoutes = (app) => {
     app.use('/api/v1/inventory', inventoryRouter);
     app.use('/api/v1/fulfillments', fulfillmentRouter);
     app.use('/api/v1/backorders', backorderRouter);
+    app.use('/api/v1/orders', ordersRoutes);
     app.use('/api/v1', subscriptionRouter);
     app.use('/api/v1', invoicingRouter);
     app.use('/api/v1', dealHealthRouter);

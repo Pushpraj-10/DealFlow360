@@ -55,5 +55,6 @@ const subscriptionSchema = new Schema(
 
 subscriptionSchema.index({ customer_id: 1 });
 subscriptionSchema.index({ status: 1 });
+subscriptionSchema.index({ originating_quote_line_id: 1 }, { unique: true });
 
 export const Subscription = mongoose.model('Subscription', subscriptionSchema);

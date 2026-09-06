@@ -48,6 +48,26 @@ const createOrGetFulfillment = async ({ quotation_id }, actorId) => {
     return fulfillment;
 };
 
+const objectIdOf = (value) => value?._id || value;
+
+const syncOrderForFulfillmentIfPresent = async (fulfillmentId, actorId) => {
+    try {
+        const {syncOrderForFulfillment} = await import('../orders/orderFlowOrchestrator.service.js');
+        return syncOrderForFulfillment({fulfillmentId, actorId});
+    } catch {
+        return null;
+    }
+};
+
+const billShipmentForOrderIfPresent = async (fulfillmentId, allocationId, actorId) => {
+    try {
+        const {handleShipmentBilling} = await import('../orders/orderFlowOrchestrator.service.js');
+        return handleShipmentBilling({fulfillmentId, allocationId, actor: actorId});
+    } catch {
+        return null;
+    }
+};
+
 /**
  * Recomputes and persists the overall Fulfillment.status from the current
  * allocation/backorder rows. Shared by accept/override/ship/consolidate so
@@ -230,7 +250,7 @@ const suggestSplit = async (fulfillmentId, actorId) => {
         );
     }
 
-    const plan = await buildSplitPlan(fulfillment.quotation_id);
+    const plan = await buildSplitPlan(objectIdOf(fulfillment.quotation_id));
 
     // Idempotent recompute: clear any previous, not-yet-accepted proposal.
     await fulfillmentRepository.deleteProposedAllocations(fulfillmentId);
@@ -253,6 +273,8 @@ const suggestSplit = async (fulfillmentId, actorId) => {
         entityId: fulfillmentId,
         metadata: { allocations: allocationRows.length, backorders: backorderRows.length },
     });
+
+    await syncOrderForFulfillmentIfPresent(fulfillmentId, actorId);
 
     return getFulfillmentDetail(fulfillmentId);
 };
@@ -323,6 +345,8 @@ const acceptSplit = async (fulfillmentId, actorId) => {
     } finally {
         await session.endSession();
     }
+
+    await syncOrderForFulfillmentIfPresent(fulfillmentId, actorId);
 
     return getFulfillmentDetail(fulfillmentId);
 };
@@ -432,6 +456,8 @@ const overrideSplit = async (fulfillmentId, { allocations: requested, reason }, 
         await session.endSession();
     }
 
+    await syncOrderForFulfillmentIfPresent(fulfillmentId, actorId);
+
     return getFulfillmentDetail(fulfillmentId);
 };
 
@@ -479,6 +505,8 @@ const recordShipment = async (fulfillmentId, { allocation_id, qty }, actorId) =>
         entityId: allocation_id,
         metadata: { qty, newShippedQty },
     });
+
+    await billShipmentForOrderIfPresent(fulfillmentId, allocation_id, actorId);
 
     return getFulfillmentDetail(fulfillmentId);
 };
@@ -561,6 +589,13 @@ const consolidateBackorder = async (backorderId, actorId) => {
         });
     } finally {
         await session.endSession();
+    }
+
+    if (result) {
+        const backorder = await fulfillmentRepository.findBackorderById(backorderId);
+        if (backorder) {
+            await syncOrderForFulfillmentIfPresent(backorder.fulfillment_id, actorId);
+        }
     }
 
     return result;

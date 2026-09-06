@@ -19,8 +19,9 @@ type Product = {
   isActive?: boolean;
   status?: string;
   isStockManaged: boolean;
+  variants?: Variant[];
 };
-type Variant = { _id: string; sku: string; extraPrice: number };
+type Variant = { _id: string; sku: string; name?: string | null; extraPrice: number };
 
 function BillingBadge({ type }: { type: string }) {
   const isRecurring = type === 'RECURRING';
@@ -52,7 +53,8 @@ export default function ProductsPage() {
   const [showModal, setShowModal] = useState(false);
   const [variantsFor, setVariantsFor] = useState<Product | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
-  const [newSku, setNewSku] = useState('');
+  const [variantForm, setVariantForm] = useState({ sku: '', name: '', extraPrice: '0' });
+  const [initialVariant, setInitialVariant] = useState({ sku: '', name: '', extraPrice: '0' });
   const [form, setForm] = useState({
     name: '',
     categoryId: '',
@@ -75,13 +77,32 @@ export default function ProductsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/products', {
+      const data = await api.post<{ product: Product }>('/products', {
         ...form,
         basePrice: Number(form.basePrice),
         costPrice: Number(form.costPrice),
         taxPercentage: Number(form.taxPercentage),
       });
+      if (initialVariant.sku.trim()) {
+        await api.post(`/products/${data.product._id}/variants`, {
+          sku: initialVariant.sku,
+          name: initialVariant.name || undefined,
+          extraPrice: Number(initialVariant.extraPrice || 0),
+        });
+      }
       setShowModal(false);
+      setForm({
+        name: '',
+        categoryId: '',
+        productType: 'Hardware',
+        billingType: 'ONE_TIME',
+        basePrice: '',
+        costPrice: '',
+        taxPercentage: '0',
+        unit: 'unit',
+        isStockManaged: true,
+      });
+      setInitialVariant({ sku: '', name: '', extraPrice: '0' });
       load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to create product');
@@ -96,8 +117,12 @@ export default function ProductsPage() {
   const addVariant = async () => {
     if (!variantsFor) return;
     try {
-      await api.post(`/products/${variantsFor._id}/variants`, { sku: newSku, extraPrice: 0 });
-      setNewSku('');
+      await api.post(`/products/${variantsFor._id}/variants`, {
+        sku: variantForm.sku,
+        name: variantForm.name || undefined,
+        extraPrice: Number(variantForm.extraPrice || 0),
+      });
+      setVariantForm({ sku: '', name: '', extraPrice: '0' });
       openVariants(variantsFor);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to add variant');
@@ -291,6 +316,30 @@ export default function ProductsPage() {
                     placeholder="0.00"
                   />
                 </div>
+                <div className="df-field">
+                  <label className="df-label">Tax %</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={form.taxPercentage}
+                    onChange={(e) => setForm({ ...form, taxPercentage: e.target.value })}
+                    required
+                    className="df-input"
+                    placeholder="0"
+                  />
+                </div>
+                <div className="df-field">
+                  <label className="df-label">Unit</label>
+                  <input
+                    value={form.unit}
+                    onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                    required
+                    className="df-input"
+                    placeholder="unit"
+                  />
+                </div>
               </div>
               <div className="df-field" style={{ marginBottom: 0 }}>
                 <label
@@ -320,6 +369,32 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 </label>
+              </div>
+              <div className="df-field" style={{ marginBottom: 0 }}>
+                <label className="df-label">Initial variant / SKU</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 0.7fr', gap: 10 }}>
+                  <input
+                    value={initialVariant.sku}
+                    onChange={(e) => setInitialVariant({ ...initialVariant, sku: e.target.value })}
+                    className="df-input"
+                    placeholder="SKU e.g. SSD-512GB"
+                  />
+                  <input
+                    value={initialVariant.name}
+                    onChange={(e) => setInitialVariant({ ...initialVariant, name: e.target.value })}
+                    className="df-input"
+                    placeholder="Variant name"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={initialVariant.extraPrice}
+                    onChange={(e) => setInitialVariant({ ...initialVariant, extraPrice: e.target.value })}
+                    className="df-input"
+                    placeholder="Extra price"
+                  />
+                </div>
               </div>
             </div>
             <div className="df-modal-footer">
@@ -363,7 +438,9 @@ export default function ProductsPage() {
                       }}
                     >
                       <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{v.sku}</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>+${v.extraPrice.toFixed(2)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {v.name ? `${v.name} · ` : ''}+${v.extraPrice.toFixed(2)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -373,15 +450,29 @@ export default function ProductsPage() {
                 </p>
               )}
               {canManage && (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px auto', gap: 8, alignItems: 'center' }}>
                   <input
-                    value={newSku}
-                    onChange={(e) => setNewSku(e.target.value)}
+                    value={variantForm.sku}
+                    onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })}
                     placeholder="SKU (e.g. SSD-512GB)"
                     className="df-input"
-                    style={{ flex: 1 }}
                   />
-                  <button onClick={addVariant} disabled={!newSku} className="btn btn-secondary">
+                  <input
+                    value={variantForm.name}
+                    onChange={(e) => setVariantForm({ ...variantForm, name: e.target.value })}
+                    placeholder="Variant name"
+                    className="df-input"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={variantForm.extraPrice}
+                    onChange={(e) => setVariantForm({ ...variantForm, extraPrice: e.target.value })}
+                    placeholder="Extra"
+                    className="df-input"
+                  />
+                  <button onClick={addVariant} disabled={!variantForm.sku.trim()} className="btn btn-secondary">
                     Add
                   </button>
                 </div>

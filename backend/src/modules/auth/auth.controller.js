@@ -1,7 +1,7 @@
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
-import {INTERNAL_ROLES, SIGNUP_REQUEST_STATUSES, USER_STATUSES} from '../../core/constants.js';
+import {SIGNUP_REQUEST_STATUSES, USER_ROLES, USER_STATUSES} from '../../core/constants.js';
 import {hashPassword, signSessionToken, verifyPassword} from './auth.service.js';
 import {User} from '../users/user.model.js';
 import {UserSignupRequest} from '../users/userSignupRequest.model.js';
@@ -13,6 +13,7 @@ const COOKIE_OPTIONS = {
 };
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const SIGNUP_REQUEST_ROLES = Object.values(USER_ROLES);
 
 const sendAuthResponse = (res, statusCode, user, message) => {
     const accessToken = signSessionToken(user);
@@ -50,7 +51,7 @@ const login = asyncHandler(async (req, res) => {
 // This never creates a User or issues a session - an admin has to approve
 // the request first (see users.controller.js).
 const requestSignup = asyncHandler(async (req, res) => {
-    const {fullName, email, password, proposedRole, team} = req.body;
+    const {fullName, email, password, proposedRole, team, customerName, customerCompany, customerPhone} = req.body;
 
     if (!fullName?.trim() || !email?.trim() || !password) {
         throw new ApiError(400, 'Full name, email, and password are required');
@@ -64,8 +65,12 @@ const requestSignup = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Password must be at least 8 characters');
     }
 
-    if (!INTERNAL_ROLES.includes(proposedRole)) {
-        throw new ApiError(400, 'proposedRole must be one of: ' + INTERNAL_ROLES.join(', '));
+    if (!SIGNUP_REQUEST_ROLES.includes(proposedRole)) {
+        throw new ApiError(400, 'proposedRole must be one of: ' + SIGNUP_REQUEST_ROLES.join(', '));
+    }
+
+    if (proposedRole === USER_ROLES.CUSTOMER && (!customerName?.trim() || !customerCompany?.trim())) {
+        throw new ApiError(400, 'Customer name and company are required for customer access requests');
     }
 
     const normalizedEmail = email.toLowerCase();
@@ -90,7 +95,10 @@ const requestSignup = asyncHandler(async (req, res) => {
         email: normalizedEmail,
         passwordHash: hashPassword(password),
         proposedRole,
-        proposedTeam: team?.trim() || null
+        proposedTeam: proposedRole === USER_ROLES.CUSTOMER ? null : team?.trim() || null,
+        customerName: proposedRole === USER_ROLES.CUSTOMER ? customerName.trim() : null,
+        customerCompany: proposedRole === USER_ROLES.CUSTOMER ? customerCompany.trim() : null,
+        customerPhone: proposedRole === USER_ROLES.CUSTOMER ? customerPhone?.trim() || null : null
     });
 
     return res

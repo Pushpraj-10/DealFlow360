@@ -14,11 +14,20 @@ type SignupRequest = {
   email: string;
   proposedRole: string;
   proposedTeam: string | null;
+  customerName: string | null;
+  customerCompany: string | null;
+  customerPhone: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reviewedById: Reviewer;
   reviewedAt: string | null;
   reviewNote: string | null;
   createdAt: string;
+};
+
+type CustomerTier = {
+  _id: string;
+  name: string;
+  defaultMaxDiscountPercent?: number;
 };
 
 function formatRole(role: string) {
@@ -31,6 +40,8 @@ export default function UsersPage() {
   // /users/signup-requests: only an admin reviews requests or sees accounts.
   const isAdmin = user?.role === 'ADMIN';
   const [pendingRequests, setPendingRequests] = useState<SignupRequest[]>([]);
+  const [customerTiers, setCustomerTiers] = useState<CustomerTier[]>([]);
+  const [customerTierByRequest, setCustomerTierByRequest] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingOnId, setActingOnId] = useState<string | null>(null);
@@ -40,21 +51,46 @@ export default function UsersPage() {
   const load = () => {
     api
       .get<{ requests: SignupRequest[] }>('/users/signup-requests?status=PENDING')
-      .then((d) => setPendingRequests(d.requests))
+      .then((d) => {
+        setPendingRequests(d.requests);
+        setCustomerTierByRequest((current) => {
+          const next = {...current};
+          for (const request of d.requests) {
+            if (request.proposedRole === 'CUSTOMER' && !next[request.id] && customerTiers[0]?._id) {
+              next[request.id] = customerTiers[0]._id;
+            }
+          }
+          return next;
+        });
+      })
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load signup requests'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    api.get<{ tiers: CustomerTier[] }>('/customer-tiers')
+      .then((d) => setCustomerTiers(d.tiers))
+      .catch(() => {});
+  }, []);
+
+  useEffect(load, [customerTiers]);
 
   const handleApprove = async (request: SignupRequest) => {
     setError(null);
     setActingOnId(request.id);
     try {
-      await api.post(`/users/signup-requests/${request.id}/approve`);
+      const payload = request.proposedRole === 'CUSTOMER'
+        ? { customerTierId: customerTierByRequest[request.id] }
+        : undefined;
+
+      if (request.proposedRole === 'CUSTOMER' && !payload?.customerTierId) {
+        throw new Error('Choose a customer tier before approving this customer.');
+      }
+
+      await api.post(`/users/signup-requests/${request.id}/approve`, payload);
       load();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to approve request');
+      setError(err instanceof Error ? err.message : 'Failed to approve request');
     } finally {
       setActingOnId(null);
     }
@@ -99,8 +135,8 @@ export default function UsersPage() {
       <div className="admin-page-header users-page__header">
         <div>
           <p className="admin-eyebrow">Governance</p>
-          <h1>Internal Users</h1>
-          <p>Anyone can request an internal account and propose a role and team. Approving here is what actually creates the account.</p>
+          <h1>Access Requests</h1>
+          <p>Anyone can request an account and propose a role. Customer approvals also create the customer record.</p>
         </div>
         <Link href="/admin/users/history" className="btn btn-ghost">
           <History size={14} />
@@ -132,7 +168,7 @@ export default function UsersPage() {
           <div className="df-empty">
             <UserPlus size={28} style={{ margin: '0 auto 10px', color: 'var(--text-tertiary)' }} />
             <div className="df-empty-title">No pending requests</div>
-            <div className="df-empty-desc">New account requests submitted from the sign-in page will show up here.</div>
+            <div className="df-empty-desc">New access requests submitted from the sign-in page will show up here.</div>
           </div>
         ) : (
           <table className="df-table">
@@ -141,7 +177,8 @@ export default function UsersPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Proposed role</th>
-                <th>Proposed team</th>
+                <th>Team / customer</th>
+                <th>Tier</th>
                 <th>Requested</th>
                 <th></th>
               </tr>
@@ -152,7 +189,39 @@ export default function UsersPage() {
                   <td style={{ fontWeight: 500 }}>{r.fullName}</td>
                   <td>{r.email}</td>
                   <td>{formatRole(r.proposedRole)}</td>
-                  <td>{r.proposedTeam || '—'}</td>
+                  <td>
+                    {r.proposedRole === 'CUSTOMER' ? (
+                      <div style={{ display: 'grid', gap: 3 }}>
+                        <strong style={{ fontSize: 12 }}>{r.customerCompany || 'Customer company missing'}</strong>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {r.customerName || r.fullName}{r.customerPhone ? ` · ${r.customerPhone}` : ''}
+                        </span>
+                      </div>
+                    ) : (
+                      r.proposedTeam || '—'
+                    )}
+                  </td>
+                  <td>
+                    {r.proposedRole === 'CUSTOMER' ? (
+                      <select
+                        className="df-select"
+                        style={{ minWidth: 150 }}
+                        value={customerTierByRequest[r.id] || ''}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setCustomerTierByRequest((current) => ({ ...current, [r.id]: e.target.value }))}
+                      >
+                        <option value="">Select tier</option>
+                        {customerTiers.map((tier) => (
+                          <option key={tier._id} value={tier._id}>
+                            {tier.name}
+                            {tier.defaultMaxDiscountPercent !== undefined ? ` · ${tier.defaultMaxDiscountPercent}%` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td>{new Date(r.createdAt).toLocaleDateString()}</td>
                   <td className="num">
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

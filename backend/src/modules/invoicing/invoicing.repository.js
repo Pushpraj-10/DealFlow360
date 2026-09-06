@@ -16,6 +16,14 @@ const findInvoiceById = (id, session) => {
 
 const findLinesByInvoiceId = (invoiceId) => InvoiceLine.find({ invoice_id: invoiceId });
 
+const findLinesBySource = (sourceType, sourceIds) => {
+    const ids = Array.isArray(sourceIds) ? sourceIds : [sourceIds];
+    return InvoiceLine.find({ source_type: sourceType, source_id: { $in: ids } }).populate({
+        path: 'invoice_id',
+        select: 'status total_cents paid_amount_cents',
+    });
+};
+
 const findPaymentsByInvoiceId = (invoiceId) => Payment.find({ invoice_id: invoiceId }).sort({ paid_at: -1 });
 
 const sumInvoicedQtyForSource = async (sourceType, sourceId) => {
@@ -70,6 +78,7 @@ export {
     findInvoices,
     findInvoiceById,
     findLinesByInvoiceId,
+    findLinesBySource,
     findPaymentsByInvoiceId,
     sumInvoicedQtyForSource,
     createInvoiceWithLine,

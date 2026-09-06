@@ -1,10 +1,14 @@
 import {ApiError} from '../../core/utils/apiError.js';
 import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
-import {SIGNUP_REQUEST_STATUSES, USER_ROLES, USER_STATUSES} from '../../core/constants.js';
+import mongoose from 'mongoose';
+
+import {CUSTOMER_STATUSES, SIGNUP_REQUEST_STATUSES, USER_ROLES, USER_STATUSES} from '../../core/constants.js';
 import {User} from './user.model.js';
 import {UserSignupRequest} from './userSignupRequest.model.js';
 import {sendSignupApprovedEmail, sendSignupRejectedEmail} from '../_shared/mail/mail.service.js';
+import {CustomerTier} from '../customerTiers/customerTier.model.js';
+import {Customer} from '../customers/customer.model.js';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
@@ -208,6 +212,20 @@ const getPendingSignupRequestOrThrow = async (requestId) => {
     return request;
 };
 
+const validateCustomerTierForApproval = async (tierId) => {
+    if (!mongoose.Types.ObjectId.isValid(tierId)) {
+        throw new ApiError(400, 'A valid customer tier is required before approving customer access');
+    }
+
+    const tier = await CustomerTier.findOne({_id: tierId, isActive: true});
+
+    if (!tier) {
+        throw new ApiError(400, 'Active customer tier not found');
+    }
+
+    return tier;
+};
+
 // Admin-only: approving creates the real account from what the requester
 // already submitted (name, email, password, proposed role/team) - the admin
 // is deciding whether to grant it, not re-entering the request.
@@ -220,12 +238,43 @@ const approveSignupRequest = asyncHandler(async (req, res) => {
         throw new ApiError(409, 'An account already exists for this email');
     }
 
+    let customer = null;
+
+    if (request.proposedRole === USER_ROLES.CUSTOMER) {
+        const tierId = req.body.customerTierId || req.body.tierId;
+        await validateCustomerTierForApproval(tierId);
+
+        if (!request.customerName || !request.customerCompany) {
+            throw new ApiError(400, 'Customer access request is missing customer details');
+        }
+
+        const existingCustomer = await Customer.findOne({
+            company: request.customerCompany,
+            email: request.email
+        });
+
+        if (existingCustomer) {
+            throw new ApiError(409, 'Customer already exists for this company and email');
+        }
+
+        customer = await Customer.create({
+            name: request.customerName,
+            email: request.email,
+            company: request.customerCompany,
+            phone: request.customerPhone || null,
+            contactPerson: request.fullName,
+            tierId,
+            status: CUSTOMER_STATUSES.ACTIVE
+        });
+    }
+
     const user = await User.create({
         fullName: request.fullName,
         email: request.email,
         passwordHash: request.passwordHash,
         role: request.proposedRole,
-        team: request.proposedTeam,
+        team: request.proposedRole === USER_ROLES.CUSTOMER ? null : request.proposedTeam,
+        customerId: customer?._id || null,
         status: USER_STATUSES.ACTIVE
     });
 
@@ -241,7 +290,7 @@ const approveSignupRequest = asyncHandler(async (req, res) => {
 
     return res
     .status(201)
-    .json(new ApiResponse(201, {user: user.toSafeObject(), request: request.toSafeObject()}, 'Signup request approved'));
+    .json(new ApiResponse(201, {user: user.toSafeObject(), customer, request: request.toSafeObject()}, 'Signup request approved'));
 });
 
 const rejectSignupRequest = asyncHandler(async (req, res) => {

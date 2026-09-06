@@ -1,6 +1,8 @@
 import mongoose, {Schema} from 'mongoose';
 
-import {INTERNAL_ROLES, SIGNUP_REQUEST_STATUSES} from '../../core/constants.js';
+import {SIGNUP_REQUEST_STATUSES, USER_ROLES} from '../../core/constants.js';
+
+const SIGNUP_REQUEST_ROLES = Object.values(USER_ROLES);
 
 const userSignupRequestSchema = new Schema(
     {
@@ -25,10 +27,25 @@ const userSignupRequestSchema = new Schema(
         // final role/team are only set on the User created at approval time.
         proposedRole: {
             type: String,
-            enum: INTERNAL_ROLES,
+            enum: SIGNUP_REQUEST_ROLES,
             required: true
         },
         proposedTeam: {
+            type: String,
+            default: null,
+            trim: true
+        },
+        customerName: {
+            type: String,
+            default: null,
+            trim: true
+        },
+        customerCompany: {
+            type: String,
+            default: null,
+            trim: true
+        },
+        customerPhone: {
             type: String,
             default: null,
             trim: true
@@ -69,6 +86,9 @@ userSignupRequestSchema.methods.toSafeObject = function toSafeObject() {
         email: this.email,
         proposedRole: this.proposedRole,
         proposedTeam: this.proposedTeam,
+        customerName: this.customerName,
+        customerCompany: this.customerCompany,
+        customerPhone: this.customerPhone,
         status: this.status,
         reviewedById: this.reviewedById,
         reviewedAt: this.reviewedAt,

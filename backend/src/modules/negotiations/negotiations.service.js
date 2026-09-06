@@ -9,7 +9,8 @@ import {ApiError} from '../../core/utils/apiError.js';
 import {ApprovalRequest} from '../approvals/approval.model.js';
 import {
     buildApprovalStepsFromRoles,
-    evaluateApprovalRule
+    evaluateApprovalRule,
+    orderApprovalRolesForRisk
 } from '../approvals/approvals.service.js';
 import {createAuditLog} from '../auditLogs/auditLogs.service.js';
 import {Customer} from '../customers/customer.model.js';
@@ -101,16 +102,18 @@ const createApprovalWorkflowForChangedQuote = async ({quotation, risk, approvalD
             {$set: {status: APPROVAL_STATUSES.CANCELLED}}
         );
 
+        const approvalRoles = orderApprovalRolesForRisk(approvalDecision.requiredApprovalRoles, risk.severity);
+
         approvalRequest = await ApprovalRequest.create({
             quotationId: quotation._id,
-            quotationVersion: quotation.currentVersion,
+            quotationVersion: updatedQuotation.currentVersion,
             requestedById: actor.id,
             status: APPROVAL_STATUSES.PENDING,
             riskLevel: risk.severity,
             riskScore: risk.totalRiskScore,
             totalExcessDiscountExposure: risk.totalExcessDiscountExposure,
             approvalRuleId: approvalDecision.rule._id,
-            steps: buildApprovalStepsFromRoles(approvalDecision.requiredApprovalRoles)
+            steps: buildApprovalStepsFromRoles(approvalRoles)
         });
 
         await createAuditLog({
@@ -122,7 +125,7 @@ const createApprovalWorkflowForChangedQuote = async ({quotation, risk, approvalD
             customerId: quotation.customerId,
             after: approvalRequest.toObject(),
             metadata: {
-                quotationVersion: quotation.currentVersion,
+                quotationVersion: updatedQuotation.currentVersion,
                 approvalRuleId: approvalDecision.rule._id,
                 source: 'NEGOTIATION_ACCEPTED'
             }

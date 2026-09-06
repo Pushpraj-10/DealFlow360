@@ -5,11 +5,23 @@ import { QuotationLine } from '../quotationLines/quotationLine.model.js';
 import { Warehouse } from '../warehouses/warehouse.model.js';
 import { Inventory } from '../inventory/inventory.model.js';
 
-const findFulfillmentById = (id) => Fulfillment.findById(id);
+const populateQuotation = (query) =>
+    query.populate({
+        path: 'quotation_id',
+        select: 'quoteNumber customerId status currentVersion confirmedVersion',
+        populate: {
+            path: 'customerId',
+            select: 'name company email'
+        }
+    });
 
-const findFulfillmentByQuotationId = (quotationId) => Fulfillment.findOne({ quotation_id: quotationId });
+const findFulfillmentById = (id) => populateQuotation(Fulfillment.findById(id));
 
-const findFulfillments = (filter = {}) => Fulfillment.find(filter).sort({ created_at: -1 });
+const findFulfillmentByQuotationId = (quotationId) =>
+    populateQuotation(Fulfillment.findOne({ quotation_id: quotationId }));
+
+const findFulfillments = (filter = {}) =>
+    populateQuotation(Fulfillment.find(filter).sort({ updated_at: -1, created_at: -1 }));
 
 const createFulfillment = (data) => Fulfillment.create(data);
 

@@ -26,8 +26,22 @@ import {
 } from '@/lib/salesRep';
 import { TableSkeletonRows } from '@/components/ui/primitives';
 
-type Customer = { _id: string; name: string; company: string };
-type Product = { _id: string; name: string };
+type Customer = { _id: string; name: string; company: string; status?: string };
+type ProductVariant = {
+  _id: string;
+  sku: string;
+  name?: string | null;
+  extraPrice?: number;
+  attributes?: Record<string, string>;
+};
+type Product = {
+  _id: string;
+  name: string;
+  isStockManaged?: boolean;
+  isActive?: boolean;
+  status?: string;
+  variants?: ProductVariant[];
+};
 type QuotationDoc = { _id: string };
 type QuotationVersion = {
   _id: string;
@@ -42,6 +56,7 @@ type QuotationVersion = {
 type QuotationLine = {
   _id: string;
   productId: { name: string } | string;
+  variantId?: { sku?: string; name?: string; attributes?: Record<string, string>; extraPrice?: number } | string | null;
   quantity: number;
   unitPrice: number;
   discountPercent: number;
@@ -105,7 +120,7 @@ export default function QuotationsPage() {
   const [quotationDetail, setQuotationDetail] = useState<QuotationDetail | null>(null);
   const [versions, setVersions] = useState<QuotationVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
-  const [lineForm, setLineForm] = useState({ productId: '', quantity: '1', discountPercent: '0' });
+  const [lineForm, setLineForm] = useState({ productId: '', variantId: '', quantity: '1', discountPercent: '0' });
   const [showNewForm, setShowNewForm] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -204,6 +219,7 @@ export default function QuotationsPage() {
     try {
       const data = await api.post<{ lines: QuotationLine[]; quotation: QuotationDetail }>(`/quotations/${selectedId}/lines`, {
         productId: lineForm.productId,
+        variantId: lineForm.variantId || undefined,
         quantity: Number(lineForm.quantity),
         discountPercent: Number(lineForm.discountPercent),
       });
@@ -340,6 +356,10 @@ export default function QuotationsPage() {
   const visibleRecommendations = recommendations.filter(
     (recommendation) => !dismissedRecommendationIds.has(recommendation.product.id)
   );
+  const activeCustomers = customers.filter((customer) => !customer.status || customer.status === 'ACTIVE');
+  const activeProducts = products.filter((product) => product.isActive !== false && product.status !== 'ARCHIVED');
+  const selectedLineProduct = activeProducts.find((product) => product._id === lineForm.productId) || null;
+  const selectedLineProductVariants = selectedLineProduct?.variants?.filter((variant) => variant._id) || [];
 
   return (
     <div className={`sales-page quotations-page${selectedId ? ' quotations-page--has-selection' : ''}`}>
@@ -404,7 +424,7 @@ export default function QuotationsPage() {
                 className="df-select"
               >
                 <option value="">Choose customer...</option>
-                {customers.map((c) => (
+                {activeCustomers.map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.company || c.name}
                   </option>
@@ -588,6 +608,11 @@ export default function QuotationsPage() {
                   <div className="quotation-lines-list">
                     {lines.map((line) => {
                       const productName = typeof line.productId === 'object' ? line.productId.name : line.productId;
+                      const variantLabel = typeof line.variantId === 'object' && line.variantId
+                        ? [line.variantId.name, line.variantId.sku].filter(Boolean).join(' · ')
+                        : typeof line.variantId === 'string'
+                          ? line.variantId
+                          : null;
                       const allowedDiscount = line.allowed_discount ?? line.allowedDiscountPercent ?? 0;
                       const excessDiscount = line.excess_discount ?? 0;
 
@@ -597,6 +622,7 @@ export default function QuotationsPage() {
                             <div className="quotation-line-product">
                               <span className="product-name">{productName}</span>
                               <div className="quotation-line-details">
+                                {variantLabel && <span>{variantLabel}</span>}
                                 <span>{line.quantity} × {money(line.unitPrice)}</span>
                                 {line.discountPercent > 0 && (
                                   <span className="line-discount">Discount {line.discountPercent}%</span>
@@ -639,13 +665,35 @@ export default function QuotationsPage() {
                         <span className="form-label">Product</span>
                         <select
                           value={lineForm.productId}
-                          onChange={(e) => setLineForm({ ...lineForm, productId: e.target.value })}
+                          onChange={(e) => setLineForm({ ...lineForm, productId: e.target.value, variantId: '' })}
                           required
                           className="df-select"
                         >
                           <option value="">Select product...</option>
-                          {products.map((p) => (
-                            <option key={p._id} value={p._id}>{p.name}</option>
+                          {activeProducts.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name}{p.variants?.length ? ` (${p.variants.length} variants)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="form-field">
+                        <span className="form-label">Variant / SKU</span>
+                        <select
+                          value={lineForm.variantId}
+                          onChange={(e) => setLineForm({ ...lineForm, variantId: e.target.value })}
+                          required={!!selectedLineProduct?.isStockManaged && selectedLineProductVariants.length > 0}
+                          disabled={!selectedLineProduct || selectedLineProductVariants.length === 0}
+                          className="df-select"
+                        >
+                          <option value="">
+                            {selectedLineProductVariants.length ? 'Select variant...' : 'No variants'}
+                          </option>
+                          {selectedLineProductVariants.map((variant) => (
+                            <option key={variant._id} value={variant._id}>
+                              {[variant.name, variant.sku].filter(Boolean).join(' · ') || variant.sku}
+                              {variant.extraPrice ? ` (+${money(variant.extraPrice)})` : ''}
+                            </option>
                           ))}
                         </select>
                       </label>

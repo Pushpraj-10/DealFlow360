@@ -6,6 +6,7 @@ import {ApiResponse} from '../../core/utils/apiResponse.js';
 import {asyncHandler} from '../../core/utils/asyncHandler.js';
 import {Category} from '../categories/category.model.js';
 import {Product} from './product.model.js';
+import {ProductVariant} from './productVariant.model.js';
 
 const isBlank = (value) => typeof value !== 'string' || value.trim().length === 0;
 
@@ -35,6 +36,24 @@ const validateCategory = async (categoryId) => {
     if (!category) {
         throw new ApiError(400, 'Active product category not found');
     }
+};
+
+const attachVariantsToProducts = async (products) => {
+    const productIds = products.map((product) => product._id);
+    const variants = productIds.length
+        ? await ProductVariant.find({productId: {$in: productIds}, isActive: true}).sort({sku: 1}).lean()
+        : [];
+    const variantsByProduct = variants.reduce((map, variant) => {
+        const key = variant.productId.toString();
+        map[key] = map[key] || [];
+        map[key].push(variant);
+        return map;
+    }, {});
+
+    return products.map((product) => ({
+        ...product,
+        variants: variantsByProduct[product._id.toString()] || []
+    }));
 };
 
 const buildProductPayload = async (body, {partial = false} = {}) => {
@@ -140,18 +159,20 @@ const buildProductPayload = async (body, {partial = false} = {}) => {
 const listProducts = asyncHandler(async (req, res) => {
     const products = await Product.find()
     .populate('categoryId', 'name maxAllowedDiscountPercent')
-    .sort({name: 1});
+    .sort({name: 1})
+    .lean();
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {products}, 'Products fetched successfully'));
+    .json(new ApiResponse(200, {products: await attachVariantsToProducts(products)}, 'Products fetched successfully'));
 });
 
 const getProduct = asyncHandler(async (req, res) => {
     validateProductId(req.params.productId);
 
     const product = await Product.findById(req.params.productId)
-    .populate('categoryId', 'name maxAllowedDiscountPercent');
+    .populate('categoryId', 'name maxAllowedDiscountPercent')
+    .lean();
 
     if (!product) {
         throw new ApiError(404, 'Product not found');
@@ -159,7 +180,7 @@ const getProduct = asyncHandler(async (req, res) => {
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {product}, 'Product fetched successfully'));
+    .json(new ApiResponse(200, {product: (await attachVariantsToProducts([product]))[0]}, 'Product fetched successfully'));
 });
 
 const createProduct = asyncHandler(async (req, res) => {

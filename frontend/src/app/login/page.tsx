@@ -11,6 +11,7 @@ const PROPOSED_ROLES = [
   { value: 'SALES_MANAGER', label: 'Sales Manager' },
   { value: 'FINANCE', label: 'Finance' },
   { value: 'ADMIN', label: 'Admin' },
+  { value: 'CUSTOMER', label: 'Customer' },
 ];
 
 const FEATURES = [
@@ -33,6 +34,9 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('');
   const [proposedRole, setProposedRole] = useState('SALES_REP');
   const [team, setTeam] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerCompany, setCustomerCompany] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
@@ -54,7 +58,10 @@ export default function LoginPage() {
           email,
           password,
           proposedRole,
-          team: team || undefined,
+          team: proposedRole === 'CUSTOMER' ? undefined : team || undefined,
+          customerName: proposedRole === 'CUSTOMER' ? customerName : undefined,
+          customerCompany: proposedRole === 'CUSTOMER' ? customerCompany : undefined,
+          customerPhone: proposedRole === 'CUSTOMER' ? customerPhone || undefined : undefined,
         });
         setRequestSubmitted(true);
       } else {
@@ -70,19 +77,16 @@ export default function LoginPage() {
 
   return (
     <div className="login-root">
-      {/* Left — Brand panel */}
+      {/* Left - Brand panel */}
       <div className="login-brand-panel">
-        {/* Glow orbs */}
         <div className="login-glow login-glow--1" />
         <div className="login-glow login-glow--2" />
 
-        {/* Logo */}
         <div className="login-logo">
           <div className="login-logo__mark">D</div>
           <span className="login-logo__name">DealFlow360</span>
         </div>
 
-        {/* Headline */}
         <div className="login-headline">
           <p className="login-eyebrow">B2B Sales Platform</p>
           <h1 className="login-headline__title">
@@ -94,7 +98,6 @@ export default function LoginPage() {
             with built-in discount governance, risk evaluation, and approval workflows.
           </p>
 
-          {/* Feature pills */}
           <div className="login-features">
             {FEATURES.map((feat) => (
               <div key={feat.text} className="login-feature-pill">
@@ -108,10 +111,9 @@ export default function LoginPage() {
         <div className="login-brand-footer">© 2026 DealFlow360 · All rights reserved</div>
       </div>
 
-      {/* Right — Form panel */}
+      {/* Right - Form panel */}
       <div className="login-form-side">
         <div className="login-form-card">
-          {/* Tab switcher */}
           <div className="login-tab-bar">
             {(['login', 'request'] as const).map((m) => (
               <button
@@ -135,7 +137,7 @@ export default function LoginPage() {
               <p className="login-success__desc">
                 An admin will review your request for{' '}
                 <strong>{formatRole(proposedRole)}</strong> access. You can sign in
-                once it's approved.
+                once it&apos;s approved.
               </p>
               <button
                 type="button"
@@ -155,7 +157,7 @@ export default function LoginPage() {
                 </h2>
                 <p className="login-form-sub">
                   {mode === 'request'
-                    ? 'Propose the role and team you need. An admin will review and approve it.'
+                    ? 'Propose the access you need. An admin will review and approve it.'
                     : 'Enter your credentials to access your workspace.'}
                 </p>
               </div>
@@ -216,7 +218,7 @@ export default function LoginPage() {
                 {mode === 'request' && (
                   <>
                     <div className="df-field">
-                      <label className="df-label" htmlFor="proposedRole">Role you're requesting</label>
+                      <label className="df-label" htmlFor="proposedRole">Role you&apos;re requesting</label>
                       <select
                         id="proposedRole"
                         value={proposedRole}
@@ -228,17 +230,57 @@ export default function LoginPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="df-field">
-                      <label className="df-label" htmlFor="team">Team (optional)</label>
-                      <input
-                        id="team"
-                        type="text"
-                        value={team}
-                        onChange={(e) => setTeam(e.target.value)}
-                        className="df-input"
-                        placeholder="e.g. east"
-                      />
-                    </div>
+                    {proposedRole === 'CUSTOMER' ? (
+                      <>
+                        <div className="df-field">
+                          <label className="df-label" htmlFor="customerName">Customer name</label>
+                          <input
+                            id="customerName"
+                            type="text"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                            className="df-input"
+                            placeholder="Procurement contact"
+                            required
+                          />
+                        </div>
+                        <div className="df-field">
+                          <label className="df-label" htmlFor="customerCompany">Company</label>
+                          <input
+                            id="customerCompany"
+                            type="text"
+                            value={customerCompany}
+                            onChange={(e) => setCustomerCompany(e.target.value)}
+                            className="df-input"
+                            placeholder="Acme Corp"
+                            required
+                          />
+                        </div>
+                        <div className="df-field">
+                          <label className="df-label" htmlFor="customerPhone">Phone (optional)</label>
+                          <input
+                            id="customerPhone"
+                            type="tel"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value)}
+                            className="df-input"
+                            placeholder="+1 555 0100"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="df-field">
+                        <label className="df-label" htmlFor="team">Team (optional)</label>
+                        <input
+                          id="team"
+                          type="text"
+                          value={team}
+                          onChange={(e) => setTeam(e.target.value)}
+                          className="df-input"
+                          placeholder="e.g. east"
+                        />
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -527,6 +569,300 @@ export default function LoginPage() {
             border: none;
             box-shadow: none;
             padding: 24px 16px;
+          }
+        }
+
+        .login-root {
+          background:
+            linear-gradient(90deg, rgba(24, 22, 19, 0.025) 1px, transparent 1px) 0 0 / 44px 44px,
+            linear-gradient(180deg, #fbfaf6 0%, #f6f3ee 100%);
+          color: #181613;
+        }
+
+        .login-brand-panel {
+          flex: 0 0 48%;
+          background: transparent;
+          border-right: 1px solid #ded8cc;
+          padding: 42px 56px;
+        }
+
+        .login-glow {
+          display: none;
+        }
+
+        .login-logo__name {
+          color: #181613;
+          font-weight: 640;
+          letter-spacing: 0;
+        }
+
+        .login-headline {
+          max-width: 520px;
+        }
+
+        .login-eyebrow {
+          color: #908779;
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          padding: 0;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0;
+          text-transform: none;
+        }
+
+        .login-headline__title {
+          color: #181613;
+          font-size: clamp(38px, 5.2vw, 64px);
+          font-weight: 620;
+          letter-spacing: 0;
+          line-height: 0.98;
+          margin-bottom: 24px;
+        }
+
+        .login-headline__desc {
+          color: #665f55;
+          font-size: 15px;
+          line-height: 1.65;
+          max-width: 440px;
+          margin-bottom: 34px;
+        }
+
+        .login-features {
+          grid-template-columns: 1fr;
+          gap: 1px;
+          border: 1px solid #ded8cc;
+          border-radius: 8px;
+          overflow: hidden;
+          background: #ded8cc;
+          max-width: 440px;
+        }
+
+        .login-feature-pill {
+          background: rgba(255, 253, 248, 0.78);
+          border: none;
+          border-radius: 0;
+          color: #181613;
+          padding: 13px 15px;
+          font-size: 13px;
+          font-weight: 520;
+        }
+
+        .login-feature-pill:hover {
+          background: #fffdf8;
+          border-color: transparent;
+          transform: none;
+        }
+
+        .login-feature-pill__icon {
+          color: #665f55;
+          background: #f1eee7;
+          border-radius: 6px;
+        }
+
+        .login-brand-footer {
+          color: #908779;
+        }
+
+        .login-form-side {
+          flex: 1;
+          background: transparent;
+        }
+
+        .login-form-card {
+          max-width: 430px;
+          padding: 32px;
+          background: rgba(255, 253, 248, 0.78);
+          border: 1px solid #ded8cc;
+          border-radius: 10px;
+          box-shadow: 0 24px 60px -48px rgba(24, 22, 19, 0.52);
+          backdrop-filter: blur(14px);
+        }
+
+        .login-tab-bar {
+          background: #f1eee7;
+          border: 1px solid #ded8cc;
+          border-radius: 8px;
+          padding: 3px;
+        }
+
+        .login-tab {
+          border-radius: 6px;
+          color: #665f55;
+          letter-spacing: 0;
+        }
+
+        .login-tab--active {
+          background: #fffdf8;
+          color: #181613;
+          box-shadow: 0 1px 0 rgba(24, 22, 19, 0.05);
+        }
+
+        .login-form-title,
+        .login-success__title {
+          color: #181613;
+          font-weight: 620;
+          letter-spacing: 0;
+        }
+
+        .login-form-sub,
+        .login-success__desc {
+          color: #665f55;
+        }
+
+        @media (max-width: 900px) {
+          .login-root {
+            display: block;
+          }
+
+          .login-brand-panel {
+            min-height: auto;
+            padding: 28px 22px 0;
+            border-right: 0;
+          }
+
+          .login-headline {
+            margin: 42px 0 28px;
+          }
+
+          .login-features,
+          .login-brand-footer {
+            display: none;
+          }
+
+          .login-form-side {
+            padding: 24px 18px 40px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .login-brand-panel {
+            display: block;
+          }
+
+          .login-headline__title {
+            font-size: 38px;
+          }
+
+          .login-form-side {
+            background: transparent;
+          }
+
+          .login-form-card {
+            border: 1px solid #ded8cc;
+            box-shadow: none;
+            padding: 22px;
+          }
+        }
+
+        .login-root {
+          background: linear-gradient(180deg, #fbfaf6 0%, #f5f1ea 100%);
+        }
+
+        .login-headline__title {
+          font-size: 56px;
+        }
+
+        @media (max-width: 900px) {
+          .login-headline__title {
+            font-size: 42px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .login-headline__title {
+            font-size: 38px;
+          }
+        }
+
+        .login-root {
+          background: #070707;
+          color: #fff;
+        }
+
+        .login-brand-panel {
+          background: #070707;
+          border-right-color: rgba(255,255,255,0.08);
+        }
+
+        .login-logo__mark {
+          background: #fff !important;
+          color: #101010 !important;
+        }
+
+        .login-logo__name,
+        .login-headline__title,
+        .login-form-title,
+        .login-success__title {
+          color: #fff;
+        }
+
+        .login-eyebrow,
+        .login-brand-footer {
+          color: #8d8d8d;
+        }
+
+        .login-headline__desc,
+        .login-form-sub,
+        .login-success__desc {
+          color: #a4a4a4;
+        }
+
+        .login-features {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.08);
+        }
+
+        .login-feature-pill {
+          background: #121212;
+          color: #d7d7d7;
+        }
+
+        .login-feature-pill:hover {
+          background: #181818;
+        }
+
+        .login-feature-pill__icon {
+          background: #1f1f1f;
+          color: #f4f4f4;
+        }
+
+        .login-form-side {
+          background: #121212;
+          border-top-left-radius: 18px;
+        }
+
+        .login-form-card {
+          background: #151515;
+          border-color: rgba(255,255,255,0.08);
+          box-shadow: none;
+        }
+
+        .login-tab-bar {
+          background: #101010;
+          border-color: rgba(255,255,255,0.08);
+        }
+
+        .login-tab {
+          color: #898989;
+        }
+
+        .login-tab--active {
+          background: #fff;
+          color: #101010;
+        }
+
+        @media (max-width: 900px) {
+          .login-form-side {
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .login-form-side {
+            background: #121212;
           }
         }
       `}</style>

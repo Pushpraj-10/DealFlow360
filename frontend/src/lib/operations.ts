@@ -49,6 +49,47 @@ export type FulfillmentDetail = {
   backorders: Backorder[];
 };
 
+export type Order = {
+  _id: string;
+  orderNumber: string;
+  quotationId?: QuotationRef;
+  quotationVersion: number;
+  customerId?: CustomerRef;
+  fulfillmentId?: Fulfillment | string | null;
+  status: string;
+  fulfillmentStatus?: string | null;
+  billingStatus?: string | null;
+  grandTotal: number;
+  currencyCode?: string;
+  flow?: {
+    lastFailedStage?: string | null;
+    lastError?: string | null;
+    updatedAt?: string | null;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type OrderLine = {
+  _id: string;
+  quotationLineId?: string | { _id?: string };
+  productId?: string | { name?: string };
+  variantId?: string | { sku?: string; name?: string };
+  lineType: 'ONE_TIME' | 'RECURRING';
+  requestedQty: number;
+  allocatedQty: number;
+  backorderQty: number;
+  shippedQty: number;
+  invoicedQty: number;
+  lineTotal: number;
+  status: string;
+};
+
+export type OrderDetail = {
+  order: Order;
+  lines: OrderLine[];
+};
+
 export type Warehouse = { _id: string; name: string };
 
 export type Subscription = {
@@ -91,6 +132,14 @@ export type Payment = {
 
 export function moneyCents(cents?: number | null) {
   return `$${((Number(cents) || 0) / 100).toFixed(2)}`;
+}
+
+export function money(value?: number | null, currency = 'USD') {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 }
 
 export function formatDate(value?: string | null) {
@@ -153,6 +202,26 @@ export function fulfillmentCustomer(fulfillment?: Fulfillment | null) {
   const quote = fulfillment?.quotation_id;
   if (!quote || typeof quote === 'string') return 'Customer not returned';
   return customerLabel(quote.customer || quote.customerId || quote.customer_id);
+}
+
+export function orderCustomer(order?: Order | null) {
+  return customerLabel(order?.customerId || null);
+}
+
+export function orderQuotation(order?: Order | null) {
+  return quotationLabel(order?.quotationId || null);
+}
+
+export function fulfillmentIdFromOrder(order?: Order | null) {
+  if (!order?.fulfillmentId) return null;
+  if (typeof order.fulfillmentId === 'string') return order.fulfillmentId;
+  return order.fulfillmentId._id;
+}
+
+export function orderLineLabel(line: OrderLine) {
+  const product = typeof line.productId === 'object' ? line.productId?.name : null;
+  const variant = typeof line.variantId === 'object' ? line.variantId?.name || line.variantId?.sku : null;
+  return [product, variant].filter(Boolean).join(' · ') || 'Order line';
 }
 
 export function sourceLabel(invoice: Invoice) {

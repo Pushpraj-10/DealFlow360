@@ -28,6 +28,8 @@ import '../../modules/inventory/inventory.model.js';
 import '../../modules/fulfillment/fulfillment.model.js';
 import '../../modules/fulfillment/fulfillment-allocation.model.js';
 import '../../modules/fulfillment/backorder.model.js';
+import '../../modules/orders/order.model.js';
+import '../../modules/orders/orderLine.model.js';
 import '../../modules/subscriptions/subscription-plan.model.js';
 import '../../modules/subscriptions/subscription.model.js';
 import '../../modules/subscriptions/subscription-change.model.js';
