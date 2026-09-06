@@ -11,16 +11,22 @@ const createPlan = (data) => SubscriptionPlan.create(data);
 const updatePlanById = (id, data) =>
     SubscriptionPlan.findByIdAndUpdate(id, data, { new: true, runValidators: true });
 
-const findSubscriptions = (filter = {}) => Subscription.find(filter).populate('plan_id').sort({ created_at: -1 });
+const populateSubscriptionRefs = (query) =>
+    query
+        .populate('plan_id')
+        .populate('customer_id', 'name company email')
+        .populate('order_id', 'orderNumber status');
+
+const findSubscriptions = (filter = {}) => populateSubscriptionRefs(Subscription.find(filter)).sort({ created_at: -1 });
 
 const findSubscriptionsByQuoteLineIds = (quoteLineIds) =>
-    Subscription.find({ originating_quote_line_id: { $in: quoteLineIds } }).populate('plan_id');
+    populateSubscriptionRefs(Subscription.find({ originating_quote_line_id: { $in: quoteLineIds } }));
 
 const findSubscriptionByQuoteLineId = (quoteLineId) =>
-    Subscription.findOne({ originating_quote_line_id: quoteLineId }).populate('plan_id');
+    populateSubscriptionRefs(Subscription.findOne({ originating_quote_line_id: quoteLineId }));
 
 const findSubscriptionById = (id, session) => {
-    const query = Subscription.findById(id).populate('plan_id');
+    const query = populateSubscriptionRefs(Subscription.findById(id));
     return session ? query.session(session) : query;
 };
 

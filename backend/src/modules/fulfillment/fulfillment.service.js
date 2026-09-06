@@ -54,7 +54,8 @@ const syncOrderForFulfillmentIfPresent = async (fulfillmentId, actorId) => {
     try {
         const {syncOrderForFulfillment} = await import('../orders/orderFlowOrchestrator.service.js');
         return syncOrderForFulfillment({fulfillmentId, actorId});
-    } catch {
+    } catch (err) {
+        console.error('[orderFlow] syncOrderForFulfillment failed:', err);
         return null;
     }
 };
@@ -63,7 +64,8 @@ const billShipmentForOrderIfPresent = async (fulfillmentId, allocationId, actorI
     try {
         const {handleShipmentBilling} = await import('../orders/orderFlowOrchestrator.service.js');
         return handleShipmentBilling({fulfillmentId, allocationId, actor: actorId});
-    } catch {
+    } catch (err) {
+        console.error('[orderFlow] handleShipmentBilling failed:', err);
         return null;
     }
 };

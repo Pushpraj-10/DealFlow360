@@ -88,7 +88,7 @@ const getSubscriptionOrThrow = async (id) => {
 };
 
 const createSubscription = async (data, actorId) => {
-    const { customer_id, originating_quote_line_id, plan_id, qty, recurring_unit_price_cents, start_date } = data;
+    const { customer_id, order_id, originating_quote_line_id, plan_id, qty, recurring_unit_price_cents, start_date } = data;
 
     if (!customer_id || !originating_quote_line_id || !plan_id || !recurring_unit_price_cents) {
         throw new ApiError(
@@ -110,6 +110,7 @@ const createSubscription = async (data, actorId) => {
 
     const subscription = await subscriptionRepository.createSubscription({
         customer_id,
+        order_id: order_id || null,
         originating_quote_line_id,
         plan_id,
         qty: qty || 1,

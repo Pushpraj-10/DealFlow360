@@ -7,6 +7,11 @@ const subscriptionSchema = new Schema(
             ref: 'Customer',
             required: true,
         },
+        order_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Order',
+            default: null,
+        },
         originating_quote_line_id: {
             type: Schema.Types.ObjectId,
             ref: 'QuotationLine',

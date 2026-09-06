@@ -126,6 +126,7 @@ const ensureSubscriptionForLine = async (order, line, actorId) => {
     try {
         return await createSubscription({
             customer_id: order.customerId,
+            order_id: order._id,
             originating_quote_line_id: quoteLineId,
             plan_id: plan._id,
             qty: line.requestedQty,
